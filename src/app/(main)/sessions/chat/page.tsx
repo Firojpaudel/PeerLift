@@ -860,7 +860,7 @@ function ChatSessionInner() {
                   accept=".pdf,.doc,.docx,.txt"
                   onChange={handleFileUpload}
                 />
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 md:p-3 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 md:p-3 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none" title="Attach document">
                   {isUploading ? <span className="w-4 h-4 rounded-full border-2 border-text-muted border-t-text-primary animate-spin block"></span> : <Paperclip size={20} />}
                 </button>
 
