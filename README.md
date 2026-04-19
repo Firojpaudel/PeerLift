@@ -77,6 +77,23 @@ The platform utilizes a DeepSeek-R1 Distilled Llama 70B reasoning model to provi
     npm run dev
     ```
 
+### Testing
+The project uses **Vitest** for high-performance unit testing.
+1.  **Run All Tests**:
+    ```bash
+    npx vitest run
+    ```
+2.  **Watch Mode**:
+    ```bash
+    npx vitest
+    ```
+
+### CI/CD Pipeline
+GitHub Actions is used for continuous quality checks:
+*   **Build Check**: Ensures the project compiles on every push.
+*   **Type Safety**: Runs TypeScript compiler checks.
+*   **Automated Testing**: executes the Vitest suite against the proposed changes.
+
 ### Docker Deployment
 
 To launch the entire stack (Database and App) using Docker Compose:
