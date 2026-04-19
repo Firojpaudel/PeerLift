@@ -340,6 +340,7 @@ function ChatSessionInner() {
           setSessionUserId(session.user.id);
           setCurrentUser(session.user);
           const pusherClient = getPusherClient();
+          if (!pusherClient) return;
           const channel = pusherClient.subscribe('presence-online');
 
           channel.bind('pusher:subscription_succeeded', (members: any) => {
@@ -396,12 +397,14 @@ function ChatSessionInner() {
     return () => {
       ignore = true;
       const pusherClient = getPusherClient();
-      pusherClient.unsubscribe('presence-online');
-      if (peerId && !isAI) {
-        const ids = [sessionUserId, peerId].sort();
-        if (ids[0] && ids[1]) {
-           const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
-           pusherClient.unsubscribe(dmChannelName);
+      if (pusherClient) {
+        pusherClient.unsubscribe('presence-online');
+        if (peerId && !isAI) {
+          const ids = [sessionUserId, peerId].sort();
+          if (ids[0] && ids[1]) {
+             const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+             pusherClient.unsubscribe(dmChannelName);
+          }
         }
       }
     };
