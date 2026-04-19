@@ -11,6 +11,7 @@ interface Contact {
   username: string;
   lastActivity: string;
   lastSeen: string | null;
+  status: string;
 }
 
 interface ChatSidebarProps {
