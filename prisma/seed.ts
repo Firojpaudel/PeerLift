@@ -1,93 +1,98 @@
-import { PrismaClient, SkillCategory, SkillLevel } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import { PrismaClient, SkillCategory, SkillLevel, MessageStatus } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
 const prisma = new PrismaClient();
 
+const USERS_TO_SEED = 12;
+
+const SKILLS = [
+  { name: 'React & Next.js', slug: 'react-next', category: SkillCategory.TECHNICAL },
+  { name: 'Nepali Literature', slug: 'nepali-lit', category: SkillCategory.ACADEMIC },
+  { name: 'UI/UX Design', slug: 'uiux', category: SkillCategory.CREATIVE },
+  { name: 'Node.js Backend', slug: 'nodejs', category: SkillCategory.TECHNICAL },
+  { name: 'Digital Art', slug: 'digital-art', category: SkillCategory.CREATIVE },
+  { name: 'Public Speaking', slug: 'public-speaking', category: SkillCategory.OTHER },
+  { name: 'Financial Literacy', slug: 'finance', category: SkillCategory.BUSINESS },
+  { name: 'Python for Data Science', slug: 'python-ds', category: SkillCategory.TECHNICAL },
+];
+
+const NEPALI_NAMES = [
+  'Aarya Sharma', 'Sagar Thapa', 'Pranjal Karki', 'Sushma Rai', 'Bikash Gurung',
+  'Anjali Shrestha', 'Kushal Magar', 'Samikshya Panday', 'Dipesh Tamang', 'Reeya Maharjan',
+  'Nikesh Adhikari', 'Sneha Regmi'
+];
+
+const NEPALI_BIOS = [
+  'CS student at IOE Pulchowk. Love teaching React and Next.js to beginners.',
+  'Dedicated to preserving Nepali literature and帮助ing students with grammar.',
+  'Creative designer from Kathmandu. Let us build beautiful interfaces together.',
+  'Backend developer with 3 years of experience in Node.js and SQL.',
+  'Artist and illustrator. I can teach you the basics of Procreate and Digital Art.',
+  'Helping young people gain confidence through public speaking and debate.',
+  'Finance professional sharing knowledge about investment and saving in Nepal.',
+  'AI enthusiast. I can guide you through the basics of Python and Pandas.',
+];
+
+const LOCATIONS = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Dharan'];
+
 async function main() {
-  const pw = await bcrypt.hash('password123', 10);
-  console.log('Seeding initial data...');
+  const passwordHash = await bcrypt.hash('password123', 10);
+  console.log('--- STARTING PREMIUM NEPALI SEED ---');
 
-  const cat1 = await prisma.skill.upsert({
-    where: { name: 'Python' },
-    update: {},
-    create: { name: 'Python', slug: 'python', category: SkillCategory.TECHNICAL },
-  });
+  // 1. Clean existing data (Nuclear Reset handled by db push, but we cleanup here too)
+  await prisma.userSkill.deleteMany({});
+  await prisma.message.deleteMany({});
+  await prisma.user.deleteMany({ where: { NOT: { email: 'admin@peerlift.app' } } });
+  await prisma.skill.deleteMany({});
 
-  const cat2 = await prisma.skill.upsert({
-    where: { name: 'Guitar' },
-    update: {},
-    create: { name: 'Guitar', slug: 'guitar', category: SkillCategory.CREATIVE },
-  });
-  
-  const cat3 = await prisma.skill.upsert({
-    where: { name: 'French' },
-    update: {},
-    create: { name: 'French', slug: 'french', category: SkillCategory.LANGUAGE },
-  });
+  // 2. Create Skills
+  const createdSkills = [];
+  for (const skillData of SKILLS) {
+    const s = await prisma.skill.create({ data: skillData });
+    createdSkills.push(s);
+    console.log(`+ Skill: ${s.name}`);
+  }
 
-  const u1 = await prisma.user.upsert({
-    where: { email: 'alice@example.com' },
-    update: {},
-    create: {
-      email: 'alice@example.com',
-      username: 'alice',
-      name: 'Alice',
-      passwordHash: pw,
-      skillsOffered: {
-        create: [{ skillId: cat1.id, level: SkillLevel.ADVANCED, note: 'Python for Data Science' }]
-      },
-      skillsWanted: {
-        create: [{ skillId: cat2.id, level: SkillLevel.BEGINNER }]
+  // 3. Create Users
+  for (let i = 0; i < USERS_TO_SEED; i++) {
+    const name = NEPALI_NAMES[i];
+    const username = name.toLowerCase().replace(' ', '_');
+    const email = `${username}@peerlift.app`;
+    
+    const offerCount = Math.floor(Math.random() * 2) + 1;
+    const skillsToOffer = [...createdSkills].sort(() => 0.5 - Math.random()).slice(0, offerCount);
+
+    await prisma.user.create({
+      data: {
+        email,
+        username,
+        name,
+        passwordHash,
+        bio: NEPALI_BIOS[i % NEPALI_BIOS.length],
+        avatarUrl: `https://i.pravatar.cc/150?u=${username}`,
+        location: LOCATIONS[i % LOCATIONS.length],
+        credits: 100,
+        skillsOffered: {
+          create: skillsToOffer.map(s => ({
+            skillId: s.id,
+            level: [SkillLevel.BEGINNER, SkillLevel.INTERMEDIATE, SkillLevel.ADVANCED][Math.floor(Math.random() * 3)],
+            note: 'Excited to share my knowledge with fellow students.'
+          }))
+        }
       }
-    }
-  });
+    });
+    console.log(`+ User: ${name}`);
+  }
 
-  const u2 = await prisma.user.upsert({
-    where: { email: 'bob@example.com' },
-    update: {},
-    create: {
-      email: 'bob@example.com',
-      username: 'bob',
-      name: 'Bob',
-      passwordHash: pw,
-      skillsOffered: {
-        create: [{ skillId: cat2.id, level: SkillLevel.ADVANCED, note: 'Acoustic fingerstyle' }]
-      },
-      skillsWanted: {
-        create: [{ skillId: cat1.id, level: SkillLevel.BEGINNER }]
-      }
-    }
-  });
-
-  const u3 = await prisma.user.upsert({
-    where: { email: 'charlie@example.com' },
-    update: {},
-    create: {
-      email: 'charlie@example.com',
-      username: 'charlie',
-      name: 'Charlie',
-      passwordHash: pw,
-      skillsOffered: {
-        create: [{ skillId: cat3.id, level: SkillLevel.ADVANCED, note: 'Native speaker' }]
-      },
-      skillsWanted: {
-        create: [{ skillId: cat2.id, level: SkillLevel.BEGINNER }]
-      }
-    }
-  });
-
-  const pwTest = await bcrypt.hash('pass123', 10);
-  const u4 = await prisma.user.upsert({
-    where: { email: 'twst@mail.com' },
-    update: {},
-    create: {
-      email: 'twst@mail.com',
-      username: 'testuser1',
-      name: 'Test Person',
-      passwordHash: pwTest,
-    }
-  });
-
-  console.log('Seeded database successfully.');
+  console.log('--- SEEDING COMPLETE ---');
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
+

@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("from") || "/dashboard";
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +33,8 @@ export default function LoginPage() {
       setErrorMsg("Login failed! Please check your credentials and try again.");
       setIsLoading(false);
     } else {
-      window.location.href = "/dashboard";
+      router.push(callbackUrl);
+      router.refresh();
     }
   };
 

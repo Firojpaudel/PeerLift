@@ -240,8 +240,24 @@ body {
   background-color: var(--color-primary-600) !important;
 }
 
-/* Override Tailwind Typography's annoying default backticks on inline code blocks */
-.prose code::before,
-.prose code::after {
-  content: none !important;
+/* Custom scrollbar for a cleaner look */::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300);
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-700);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-400);
 }

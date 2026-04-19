@@ -3,6 +3,9 @@ import { SkillCard } from "@/components/features/skills/SkillCard"
 import prisma from "@/lib/prisma"
 import { Search } from "lucide-react"
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function ExplorePage({
   searchParams,
 }: {
@@ -13,29 +16,51 @@ export default async function ExplorePage({
   // Fetch users with their skills dynamically, applying simple search filter
   const users = await prisma.user.findMany({
     take: 12,
-    include: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      bio: true,
+      avatarUrl: true,
+      location: true,
+      avgRating: true,
+      totalSessions: true,
       skillsOffered: {
-        include: { skill: true }
+        select: {
+          level: true,
+          skill: {
+            select: { name: true, category: true }
+          }
+        }
       },
       skillsWanted: {
-        include: { skill: true }
+        select: {
+          skill: {
+            select: { name: true }
+          }
+        }
       }
     },
     where: {
-      skillsOffered: { some: {} },
-      ...(query && {
+      OR: [
+        { skillsOffered: { some: {} } },
+        { skillsWanted: { some: {} } },
+        { bio: { not: "" } },
+        { name: { not: "" } }
+      ],
+      ...(query.trim() ? {
         OR: [
-          { name: { contains: query, mode: "insensitive" } },
-          { bio: { contains: query, mode: "insensitive" } },
+          { name: { contains: query.trim(), mode: "insensitive" } },
+          { bio: { contains: query.trim(), mode: "insensitive" } },
           {
             skillsOffered: {
               some: {
-                skill: { name: { contains: query, mode: "insensitive" } }
+                skill: { name: { contains: query.trim(), mode: "insensitive" } }
               }
             }
           },
         ]
-      })
+      } : {})
     },
     orderBy: {
       createdAt: 'desc'

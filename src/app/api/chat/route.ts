@@ -2,6 +2,10 @@ import { createGroq } from "@ai-sdk/groq";
 import { streamText, tool } from "ai";
 import { z } from "zod";
 import * as cheerio from "cheerio";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { compressString } from "@/lib/compression";
 
 export const maxDuration = 30; // Max execution time for Serverless Functions
 
@@ -37,10 +41,31 @@ function convertToModelMessages(messages: any[]): any[] {
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+    const userId = session.user.id;
+
     const { messages, contextData } = await req.json();
 
     // Convert UIMessage[] -> ModelMessage[] for streamText compatibility
     const modelMessages = convertToModelMessages(messages);
+
+    // Store the user's latest message if it exists
+    const lastUserMessage = modelMessages[modelMessages.length - 1];
+    if (lastUserMessage && lastUserMessage.role === 'user') {
+      const compressedContent = await compressString(lastUserMessage.content);
+      // We do this asynchronously to not block the AI response
+      prisma.message.create({
+        data: {
+          role: 'user',
+          content: compressedContent,
+          userId: userId,
+          isCompressed: true,
+        }
+      }).catch((err: any) => console.error("Failed to store user message:", err));
+    }
 
     const tutorName = contextData?.tutorName || "Lumina AI";
 
@@ -63,8 +88,8 @@ Keep your tone warm, empowering, and human. Emphasize learning step-by-step.
 ${contextData?.learningGoal ? `\nUser's Learning Goal/Topic: ${contextData.learningGoal} | Detail Level: ${contextData.learningDetail}` : ""}
 ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextData.documentText}\n---------------------------------` : ""}`;
 
-    const tModel = contextData?.isReasoning 
-      ? groq("deepseek-r1-distill-llama-70b") 
+    const tModel = contextData?.isReasoning
+      ? groq("deepseek-r1-distill-llama-70b")
       : groq("llama-3.3-70b-versatile");
 
     const result = await streamText({
@@ -82,8 +107,7 @@ ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextD
           parameters: z.object({
             query: z.string().describe("The exact search query to execute on the open web"),
           }),
-          execute: async (args) => {
-            const { query } = args;
+          execute: async ({ query }: { query: string }) => {
             try {
               const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
               const html = await res.text();
@@ -98,6 +122,21 @@ ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextD
             }
           },
         }),
+      },
+      onFinish: async ({ text }) => {
+        try {
+          const compressedContent = await compressString(text);
+          await prisma.message.create({
+            data: {
+              role: 'assistant',
+              content: compressedContent,
+              userId: userId,
+              isCompressed: true,
+            }
+          });
+        } catch (err: any) {
+          console.error("Failed to store assistant message:", err);
+        }
       },
     });
 

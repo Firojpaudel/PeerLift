@@ -10,7 +10,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { receiverId, offeredSkillId, requestedSkillId, message } = await req.json();
+    const { 
+      receiverId, 
+      offeredSkillId, 
+      requestedSkillId, 
+      offeredCredits, 
+      requestedCredits, 
+      message 
+    } = await req.json();
 
     if (!receiverId || !message) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -20,8 +27,10 @@ export async function POST(req: Request) {
       data: {
         senderId: session.user.id,
         receiverId,
-        offeredSkillId: offeredSkillId || "CREDITS", // Fallback for credit transactions
-        requestedSkillId: requestedSkillId || "CREDITS",
+        offeredSkillId: offeredSkillId || null,
+        requestedSkillId: requestedSkillId || null,
+        offeredCredits: offeredCredits || null,
+        requestedCredits: requestedCredits || null,
         message,
       }
     });

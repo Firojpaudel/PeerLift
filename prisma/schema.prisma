@@ -8,44 +8,47 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  emailVerified DateTime?
-  username      String    @unique
-  passwordHash  String?
-  name          String
-  bio           String?   @db.VarChar(160)
-  avatarUrl     String?
-  location      String?
-  isAdmin       Boolean   @default(false)
-  isBanned      Boolean   @default(false)
-  banReason     String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  credits       Int       @default(50)
-
+  id                String                   @id @default(uuid())
+  email             String                   @unique
+  emailVerified     DateTime?
+  username          String                   @unique
+  passwordHash      String?
+  name              String
+  bio               String?                  @db.VarChar(160)
+  avatarUrl         String?
+  location          String?
+  isAdmin           Boolean                  @default(false)
+  isBanned          Boolean                  @default(false)
+  banReason         String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  credits           Int                      @default(50)
+  lastSeen          DateTime?                @default(now())
+  avgRating         Float                    @default(0)
+  totalSessions     Int                      @default(0)
+  totalReviews      Int                      @default(0)
+  searchVector      Unsupported("tsvector")?
   accounts          Account[]
   sessions          AuthSession[]
-  skillsOffered     UserSkill[]       @relation("SkillsOffered")
-  skillsWanted      UserSkill[]       @relation("SkillsWanted")
   availability      Availability[]
-  requestsSent      ExchangeRequest[] @relation("RequestSender")
-  requestsReceived  ExchangeRequest[] @relation("RequestReceiver")
-  sessionsAsLearner Session[]         @relation("SessionLearner")
-  sessionsAsMentor  Session[]         @relation("SessionMentor")
-  reviewsGiven      Review[]          @relation("ReviewGiver")
-  reviewsReceived   Review[]          @relation("ReviewReceiver")
+  requestsReceived  ExchangeRequest[]        @relation("RequestReceiver")
+  requestsSent      ExchangeRequest[]        @relation("RequestSender")
+  messages          Message[]
   notifications     Notification[]
   reports           Report[]
-
-  avgRating     Float @default(0)
-  totalSessions Int   @default(0)
-  totalReviews  Int   @default(0)
-
-  searchVector Unsupported("tsvector")?
+  reviewsGiven      Review[]                 @relation("ReviewGiver")
+  reviewsReceived   Review[]                 @relation("ReviewReceiver")
+  sessionsAsLearner Session[]                @relation("SessionLearner")
+  sessionsAsMentor  Session[]                @relation("SessionMentor")
+  skillsOffered     UserSkill[]              @relation("SkillsOffered")
+  skillsWanted      UserSkill[]              @relation("SkillsWanted")
+  friendsSent       Friendship[]             @relation("FriendshipSender")
+  friendsReceived   Friendship[]             @relation("FriendshipReceiver")
 
   @@index([username])
   @@index([email])
+  @@index([name])
+  @@index([bio])
   @@map("users")
 }
 
@@ -55,12 +58,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -87,25 +90,12 @@ model Skill {
   iconUrl     String?
   isVerified  Boolean       @default(false)
   usageCount  Int           @default(0)
-
-  userSkills UserSkill[]
-
-  createdAt DateTime @default(now())
+  createdAt   DateTime      @default(now())
+  userSkills  UserSkill[]
 
   @@index([slug])
   @@index([category])
   @@map("skills")
-}
-
-enum SkillCategory {
-  TECHNICAL
-  CREATIVE
-  ACADEMIC
-  LANGUAGE
-  SPORTS
-  LIFESTYLE
-  BUSINESS
-  OTHER
 }
 
 model UserSkill {
@@ -116,18 +106,13 @@ model UserSkill {
   level          SkillLevel
   note           String?    @db.VarChar(200)
   createdAt      DateTime   @default(now())
-
-  userOffering User? @relation("SkillsOffered", fields: [offeringUserId], references: [id], onDelete: Cascade)
-  userWanting  User? @relation("SkillsWanted", fields: [wantingUserId], references: [id], onDelete: Cascade)
-  skill        Skill @relation(fields: [skillId], references: [id])
+  userOffering   User?      @relation("SkillsOffered", fields: [offeringUserId], references: [id], onDelete: Cascade)
+  skill          Skill      @relation(fields: [skillId], references: [id])
+  userWanting         User?             @relation("SkillsWanted", fields: [wantingUserId], references: [id], onDelete: Cascade)
+  offeredInRequests   ExchangeRequest[] @relation("OfferedInRequest")
+  requestedInRequests ExchangeRequest[] @relation("RequestedInRequest")
 
   @@map("user_skills")
-}
-
-enum SkillLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
 }
 
 model Availability {
@@ -147,21 +132,25 @@ model ExchangeRequest {
   id                      String        @id @default(uuid())
   senderId                String
   receiverId              String
-  offeredSkillId          String
-  requestedSkillId        String
-  message                 String        @db.Text
+  offeredSkillId          String?
+  requestedSkillId        String?
+  offeredCredits          Int?
+  requestedCredits        Int?
+  message                 String
   status                  RequestStatus @default(PENDING)
-  counterMessage          String?       @db.Text
+  counterMessage          String?
   counterOfferedSkillId   String?
   counterRequestedSkillId String?
   parentRequestId         String?
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
   resolvedAt              DateTime?
-
-  sender   User     @relation("RequestSender", fields: [senderId], references: [id])
-  receiver User     @relation("RequestReceiver", fields: [receiverId], references: [id])
-  session  Session?
+  
+  receiver                User          @relation("RequestReceiver", fields: [receiverId], references: [id])
+  sender                  User          @relation("RequestSender", fields: [senderId], references: [id])
+  offeredSkill            UserSkill?    @relation("OfferedInRequest", fields: [offeredSkillId], references: [id])
+  requestedSkill          UserSkill?    @relation("RequestedInRequest", fields: [requestedSkillId], references: [id])
+  session                 Session?
 
   @@index([senderId])
   @@index([receiverId])
@@ -169,48 +158,31 @@ model ExchangeRequest {
   @@map("exchange_requests")
 }
 
-enum RequestStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
-  COUNTERED
-  WITHDRAWN
-  EXPIRED
-}
-
 model Session {
-  id           String        @id @default(uuid())
-  requestId    String        @unique
+  id           String          @id @default(uuid())
+  requestId    String          @unique
   mentorId     String
   learnerId    String
   skillId      String
   scheduledAt  DateTime
   duration     Int
-  timezone     String        @default("UTC")
-  status       SessionStatus @default(SCHEDULED)
+  timezone     String          @default("UTC")
+  status       SessionStatus   @default(SCHEDULED)
   meetingLink  String?
-  notes        String?       @db.Text
+  notes        String?
   cancelReason String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
   completedAt  DateTime?
-
-  request ExchangeRequest @relation(fields: [requestId], references: [id])
-  mentor  User            @relation("SessionMentor", fields: [mentorId], references: [id])
-  learner User            @relation("SessionLearner", fields: [learnerId], references: [id])
-  reviews Review[]
+  reviews      Review[]
+  learner      User            @relation("SessionLearner", fields: [learnerId], references: [id])
+  mentor       User            @relation("SessionMentor", fields: [mentorId], references: [id])
+  request      ExchangeRequest @relation(fields: [requestId], references: [id])
 
   @@index([mentorId])
   @@index([learnerId])
   @@index([scheduledAt])
   @@map("sessions")
-}
-
-enum SessionStatus {
-  SCHEDULED
-  COMPLETED
-  CANCELLED
-  NO_SHOW
 }
 
 model Review {
@@ -219,13 +191,12 @@ model Review {
   giverId    String
   receiverId String
   rating     Int
-  comment    String?  @db.Text
+  comment    String?
   isPublic   Boolean  @default(true)
   createdAt  DateTime @default(now())
-
-  session  Session @relation(fields: [sessionId], references: [id])
-  giver    User    @relation("ReviewGiver", fields: [giverId], references: [id])
-  receiver User    @relation("ReviewReceiver", fields: [receiverId], references: [id])
+  giver      User     @relation("ReviewGiver", fields: [giverId], references: [id])
+  receiver   User     @relation("ReviewReceiver", fields: [receiverId], references: [id])
+  session    Session  @relation(fields: [sessionId], references: [id])
 
   @@unique([sessionId, giverId])
   @@index([receiverId])
@@ -241,11 +212,105 @@ model Notification {
   link      String?
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+model Report {
+  id           String       @id @default(uuid())
+  reporterId   String
+  targetUserId String
+  reason       ReportReason
+  description  String?
+  status       ReportStatus @default(OPEN)
+  resolvedBy   String?
+  resolvedAt   DateTime?
+  createdAt    DateTime     @default(now())
+  reporter     User         @relation(fields: [reporterId], references: [id])
+
+  @@index([status])
+  @@map("reports")
+}
+
+model Message {
+  id           String        @id @default(uuid())
+  role         String
+  content      String
+  isCompressed Boolean       @default(true)
+  userId       String
+  createdAt    DateTime      @default(now())
+  receiverId   String?
+  sessionId    String?
+  status       MessageStatus @default(SENT)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([receiverId])
+  @@index([sessionId])
+  @@map("messages")
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  senderId    String
+  receiverId  String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  sender      User             @relation("FriendshipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User             @relation("FriendshipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@map("friendships")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+enum SkillCategory {
+  TECHNICAL
+  CREATIVE
+  ACADEMIC
+  LANGUAGE
+  SPORTS
+  LIFESTYLE
+  BUSINESS
+  OTHER
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COUNTERED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
 }
 
 enum NotificationType {
@@ -259,23 +324,6 @@ enum NotificationType {
   REVIEW_RECEIVED
   PROFILE_VIEWED
   SYSTEM
-}
-
-model Report {
-  id           String       @id @default(uuid())
-  reporterId   String
-  targetUserId String
-  reason       ReportReason
-  description  String?      @db.Text
-  status       ReportStatus @default(OPEN)
-  resolvedBy   String?
-  resolvedAt   DateTime?
-  createdAt    DateTime     @default(now())
-
-  reporter User @relation(fields: [reporterId], references: [id])
-
-  @@index([status])
-  @@map("reports")
 }
 
 enum ReportReason {

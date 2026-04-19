@@ -6,13 +6,19 @@ import { useSearchParams } from 'next/navigation';
 import { useChat } from '@ai-sdk/react';
 // @ts-ignore - Transport types in AI SDK 6 might vary locally
 import { TextStreamChatTransport } from 'ai';
-import { ChevronLeft, Send, Phone, Search, Users, Bot, Mic, Settings2, PlayCircle, X, Maximize, Minimize, Plus, Paperclip, Brain, Volume2, Square } from 'lucide-react';
+import { ChevronLeft, Send, Phone, Search, Users, Bot, Mic, Settings2, PlayCircle, X, Maximize, Minimize, Plus, Paperclip, Brain, Volume2, Square, Video, Calendar } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+import { getPusherClient } from '@/lib/pusher';
+import { ChatSidebar } from '@/components/features/chat/ChatSidebar';
+import { MessageList } from '@/components/features/chat/MessageList';
+import { ScheduleMeetModal } from '@/components/features/chat/ScheduleMeetModal';
+
+// --- Mermaid Chart Component ---
 const MermaidChart = ({ chart }: { chart: string }) => {
   const [svg, setSvg] = useState('');
   const [isError, setIsError] = useState(false);
@@ -21,77 +27,106 @@ const MermaidChart = ({ chart }: { chart: string }) => {
   const sanitizeMermaid = (code: string) => {
     return code
       .trim()
-      // Fix unicode arrows often hallucinated by models like DeepSeek (→, ⎯→, ⇒, etc.)
       .replace(/[→⎯→⇒⇨\u2192\u2190\u2194\u21D0\u21D2]/g, '-->')
-      // Fix LLM hallucinating label-based arrows like "--> |label|>" or "---|label|>"
-      // We use a more permissive match for the arrowhead
       .replace(/(-{1,})*>*\s*\|([^|]+)\|>+/g, '-->|$2|')
-      // Fix cases where it uses --|Label| or ---|Label| instead of -->|Label|
       .replace(/(-{2,})\s*\|([^|]+)\|/g, '-->|$2|')
-      // Fix standalone "-> |label|" or "->|label|"
       .replace(/->\s*\|([^|]+)\|/g, '-->|$1|')
-      // Fix single dash arrows or simple -> which are invalid in many mermaid versions
-      .replace(/(\w+)\s*->\s*(\w+)/g, '$1 --> $2')
-      // Ensure specific characters in labels are sanitized if not quoted
-      .replace(/\[([^\]\[]+)\]/g, (match, content) => {
-        if (content.startsWith('"') && content.endsWith('"')) return match;
-        return `["${content.replace(/"/g, "'")}"]`;
-      });
+      .replace(/(\[[^\]]+\])\s*(-{2,})\s*\|([^|]+)\|/g, '$1-->|$3|')
+      .replace(/graph\s+(TD|LR|BT|RL)\s+/g, 'graph $1\n');
   };
-  
+
   useEffect(() => {
-    setShowRaw(false);
-    let timeout: NodeJS.Timeout;
+    const renderChart = async () => {
+      try {
+        const { default: mermaid } = await import('mermaid');
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          securityLevel: 'loose',
+          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+        });
 
-    const sanitizedCode = sanitizeMermaid(chart);
-
-    import('mermaid').then((mermaid) => {
-      const isDark = document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
-      mermaid.default.initialize({ 
-        startOnLoad: false, 
-        theme: isDark ? 'dark' : 'default',
-        suppressErrorRendering: true,
-        securityLevel: 'loose'
-      });
-
-      mermaid.default.render(`mermaid-${Math.random().toString(36).substr(2, 9)}`, sanitizedCode).then((result) => {
-        if (result.svg.includes('Syntax error')) {
-          setIsError(true);
-          timeout = setTimeout(() => setShowRaw(true), 2500);
-        } else {
-          setSvg(result.svg);
-          setIsError(false);
-        }
-      }).catch(_e => {
+        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+        const sanitized = sanitizeMermaid(chart);
+        const { svg: svgCode } = await mermaid.render(id, sanitized);
+        setSvg(svgCode);
+        setIsError(false);
+      } catch (err) {
+        console.error('Mermaid render error:', err);
         setIsError(true);
-        timeout = setTimeout(() => setShowRaw(true), 2500);
-      });
-    });
-
-    return () => clearTimeout(timeout);
+      }
+    };
+    renderChart();
   }, [chart]);
 
-  if (showRaw) {
+  if (isError) {
     return (
-      <div className="my-5 rounded-xl overflow-hidden shadow-2xl border border-red-500/20 bg-[#1e1e1e]">
-         <div className="bg-red-500/10 border-b border-red-500/10 px-4 py-2 text-xs text-red-400 flex items-center uppercase tracking-wider" style={{ fontFamily: '"Iosevka", "Iosevka Term", monospace' }}>
-           UNPARSEABLE GRAPH DATA
-         </div>
-         <pre className="p-4 text-red-300 text-[13px] overflow-x-auto m-0" style={{ fontFamily: '"Iosevka", "Iosevka Term", monospace' }}>
-           {chart}
-         </pre>
+      <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Chart Error</span>
+          <button onClick={() => setShowRaw(!showRaw)} className="text-[10px] bg-red-500/20 px-2 py-0.5 rounded text-red-400 hover:bg-red-500/30">
+            {showRaw ? 'Back to Error' : 'View Raw Code'}
+          </button>
+        </div>
+        {showRaw ? (
+          <pre className="text-[10px] text-red-400/80 overflow-auto max-h-40 p-2 bg-black/20 rounded-lg">{chart}</pre>
+        ) : (
+          <p className="text-xs text-red-400">Failed to render this diagram. The AI might have used invalid syntax.</p>
+        )}
       </div>
     );
   }
 
-  if (isError && !svg) {
-    return <div className="text-primary-500 animate-pulse text-sm my-4 flex items-center justify-center p-4 bg-white/5 rounded-xl border border-border">Drawing chart...</div>;
-  }
+  return (
+    <div className="my-4 overflow-hidden rounded-xl border border-white/5 shadow-2xl relative group">
+      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-2">
+        <button onClick={() => setShowRaw(!showRaw)} className="p-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white/70 hover:text-white transition-colors" title="View Source">
+          <PlayCircle size={14} />
+        </button>
+      </div>
+      {showRaw ? (
+        <div className="p-4 bg-[#1e1e1e] font-mono text-[11px] text-primary-300">
+          {chart}
+        </div>
+      ) : (
+        <div
+          className="p-6 bg-[#0B0B0B] flex justify-center items-center cursor-zoom-in overflow-auto min-h-[200px]"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      )}
+    </div>
+  );
+};
+
+// --- Thinking / Reasoning Component ---
+const ThoughtBlock = ({ content }: { content: string }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
 
   return (
-    <div className={`mermaid-chart flex justify-center w-full overflow-x-auto my-4 bg-bg-elevated p-4 rounded-xl border border-border transition-opacity duration-300 ${isError ? 'opacity-50' : 'opacity-100'}`} 
-         dangerouslySetInnerHTML={{ __html: svg }} 
-    />
+    <div className="mb-4 overflow-hidden border border-amber-500/20 rounded-2xl bg-gradient-to-br from-amber-500/5 to-transparent">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-3.5 hover:bg-amber-500/10 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-500">
+            <Brain size={16} className={isExpanded ? 'animate-pulse' : ''} />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-amber-500 leading-none mb-1">Reasoning Mode</h4>
+            <p className="text-[10px] text-amber-500/60 uppercase tracking-widest font-extrabold">Active Analysis</p>
+          </div>
+        </div>
+        <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+          <ChevronLeft size={16} className="-rotate-90 text-amber-500/50" />
+        </div>
+      </button>
+      {isExpanded && (
+        <div className="p-4 pt-0 text-[13px] leading-relaxed text-text-secondary/80 font-medium italic animate-in fade-in slide-in-from-top-2 duration-300">
+          <ReactMarkdown className="prose prose-sm prose-p:my-1 opacity-70 border-l-2 border-amber-500/20 pl-4 ml-1">{content}</ReactMarkdown>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -190,203 +225,301 @@ function getMessageText(m: any): string {
 function ChatSessionInner() {
   const searchParams = useSearchParams();
   const isAI = searchParams.get('ai') === 'true';
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const peerId = searchParams.get('peerId') || '';
 
-  // Setup form for AI tutoring
-  const [dmInput, setDmInput] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Local Session State
+  const [sessionUserId, setSessionUserId] = useState<string>('');
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // DM State
+  const [dmMessages, setDmMessages] = useState<any[]>([]);
+  const [dmInput, setDmInput] = useState('');
+  const [isLoadingDM, setIsLoadingDM] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isPeerTyping, setIsPeerTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // UI States
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showConfig, setShowConfig] = useState(isAI);
-  const [learningGoal, setLearningGoal] = useState('');
-  const [learningDetail, setLearningDetail] = useState('Intermediate');
-  const [tutorName, setTutorName] = useState('Lumina');
-  const [isConfigured, setIsConfigured] = useState(!isAI);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  // Voice UI States
   const [isListening, setIsListening] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
 
-  // Advanced AI states
+  // AI Config
+  const [learningGoal, setLearningGoal] = useState('');
+  const [learningDetail, setLearningDetail] = useState('Intermediate');
+  const [tutorName, setTutorName] = useState('Lumina');
+  const [isConfigured, setIsConfigured] = useState(!isAI);
   const [isReasoningMode, setIsReasoningMode] = useState(false);
+
+  // Speech & Voice
   const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // Document Parsing
   const [parsedDoc, setParsedDoc] = useState<{ text: string, name: string } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/parse-doc', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (res.ok && data.text) {
-        setParsedDoc({ text: data.text, name: data.filename });
-      } else {
-        alert(data.error || 'Failed to parse document');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error uploading document');
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  // Ref to track if voice mode is active (avoids stale closures)
   const voiceModeRef = useRef(false);
   const recognitionRef = useRef<any>(null);
 
-  // Keep voiceModeRef in sync
-  useEffect(() => {
-    voiceModeRef.current = showVoiceMode;
-  }, [showVoiceMode]);
+  // --- AI Hook (v6 SDK) ---
+  const chatTransport = React.useMemo(() => new (TextStreamChatTransport as any)({
+    api: '/api/chat',
+    body: {
+      contextData: { learningGoal, learningDetail, tutorName, isReasoning: isReasoningMode, documentText: parsedDoc?.text },
+    }
+  }), [learningGoal, learningDetail, tutorName, isReasoningMode, parsedDoc]);
 
-  // Call duration timer
+  const { 
+    messages: aiMessages, 
+    input: aiInput, 
+    handleInputChange, 
+    handleSubmit: sendAI, 
+    append, 
+    isLoading: isAILoading, 
+    setMessages 
+  } = useChat({
+    experimental_chatTransport: chatTransport as any,
+  });
+
+  // Auto-unlock UI if we already have a conversation
+  useEffect(() => {
+    if (aiMessages.length > 0) {
+      setIsConfigured(true);
+    }
+  }, [aiMessages.length]);
+
+  // Track call duration
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (showVoiceMode) {
+      interval = setInterval(() => setCallDuration(d => d + 1), 1000);
+      voiceModeRef.current = true;
+    } else {
       setCallDuration(0);
-      interval = setInterval(() => {
-        setCallDuration((prev) => prev + 1);
-      }, 1000);
+      voiceModeRef.current = false;
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [showVoiceMode]);
 
   const formatDuration = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ─── AI Chat Hook (v6 SDK) ───────────────────────────────────────
-  // Use TextStreamChatTransport because our API route returns toTextStreamResponse()
-  const chatTransport = React.useMemo(
-    () =>
-      new (TextStreamChatTransport as any)({
-        api: '/api/chat',
-        body: {
-          contextData: { 
-            learningGoal, 
-            learningDetail, 
-            tutorName,
-            isReasoning: isReasoningMode,
-            documentText: parsedDoc?.text 
-          },
-        },
-      }),
-    [learningGoal, learningDetail, tutorName, isReasoningMode, parsedDoc?.text]
-  );
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const { messages, sendMessage, status, stop, setMessages } = useChat({
-    transport: chatTransport,
-  });
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
 
-  const isLoading = status === 'submitted' || status === 'streaming';
-
-  const [input, setInput] = useState('');
-
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
-  }, []);
-
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!input.trim() || isLoading) return;
-      sendMessage({ text: input });
-      setInput('');
-    },
-    [input, isLoading, sendMessage]
-  );
-
-  // ─── Voice Mode (V2V) ────────────────────────────────────────────
-  // Cleanup: stop everything when voice mode is turned off
-  const stopVoiceMode = useCallback(() => {
-    setShowVoiceMode(false);
-    setIsListening(false);
-
-    // Stop any active recognition
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (_e) { /* noop */ }
-      recognitionRef.current = null;
+    try {
+      const res = await fetch('/api/chat/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.text) {
+        setParsedDoc({ text: data.text, name: file.name });
+        // Initial AI message about the document
+        append({ role: 'user', content: `I've uploaded a document named "${file.name}". Can you summarize it for me?` });
+      }
+    } catch (err) {
+      console.error("Upload failed:", err);
+    } finally {
+      setIsUploading(false);
     }
+  };
 
-    // Cancel any ongoing TTS
-    window.speechSynthesis.cancel();
-    setCurrentlySpeakingId(null);
-  }, []);
+  // Syncing logic
+  useEffect(() => {
+    let ignore = false;
+    const initPusher = async () => {
+      try {
+        const res = await fetch('/api/auth/session');
+        const session = await res.json();
+        if (ignore) return;
 
-  // Proactive Voice Loading
+        if (session?.user?.id) {
+          setSessionUserId(session.user.id);
+          setCurrentUser(session.user);
+          const pusherClient = getPusherClient();
+          const channel = pusherClient.subscribe('presence-online');
+
+          channel.bind('pusher:subscription_succeeded', (members: any) => {
+            const online = new Set<string>();
+            Object.keys(members.members).forEach(id => online.add(id));
+            setOnlineUsers(online);
+          });
+
+          channel.bind('pusher:member_added', (member: any) => {
+            setOnlineUsers(prev => new Set(prev).add(member.id));
+          });
+
+          channel.bind('pusher:member_removed', (member: any) => {
+            setOnlineUsers(prev => {
+              const next = new Set(prev);
+              next.delete(member.id);
+              return next;
+            });
+          });
+
+          // Private DM binding
+          if (peerId && !isAI) {
+            const ids = [session.user.id, peerId].sort();
+            const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+            const dmChannel = pusherClient.subscribe(dmChannelName);
+
+            // Unbind first to prevent duplicate listeners on the same channel instance
+            dmChannel.unbind('new-message');
+            dmChannel.unbind('peer-typing');
+
+            dmChannel.bind('new-message', (data: any) => {
+              if (data.userId !== session.user.id) {
+                setDmMessages(prev => [...prev, data]);
+              }
+            });
+
+            dmChannel.bind('peer-typing', (data: any) => {
+              if (data.userId === peerId) {
+                setIsPeerTyping(data.isTyping);
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                if (data.isTyping) {
+                  typingTimeoutRef.current = setTimeout(() => setIsPeerTyping(false), 3500);
+                }
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Pusher err:", err);
+      }
+    };
+    initPusher();
+
+    return () => {
+      ignore = true;
+      const pusherClient = getPusherClient();
+      pusherClient.unsubscribe('presence-online');
+      if (peerId && !isAI) {
+        const ids = [sessionUserId, peerId].sort();
+        if (ids[0] && ids[1]) {
+           const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+           pusherClient.unsubscribe(dmChannelName);
+        }
+      }
+    };
+  }, [sessionUserId, peerId, isAI]);
+
+  // Load selected peer details & historical messages
+  useEffect(() => {
+    if (!sessionUserId) return;
+    if (!isAI && !peerId) return;
+
+    const query = isAI ? 'isAi=true' : `peerId=${peerId}`;
+    fetch(`/api/chat/messages?${query}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error && Array.isArray(data)) {
+          if (isAI) {
+            setMessages(data);
+          } else {
+            setDmMessages(data.map((m: any) => ({ ...m, status: 'READ' })));
+          }
+        }
+      });
+
+    if (!isAI && peerId) {
+      fetch(`/api/chat/contacts`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error && Array.isArray(data)) {
+            const u = data.find((c: any) => c.id === peerId);
+            if (u) setSelectedUser(u);
+          }
+        });
+    }
+  }, [peerId, isAI, sessionUserId, setMessages]);
+
+
+  // Voices Proactive
   useEffect(() => {
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        setAvailableVoices(voices);
-      }
+      if (voices.length > 0) setAvailableVoices(voices);
     };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
     return () => { window.speechSynthesis.onvoiceschanged = null; };
   }, []);
 
+  // Typing Indicator Trigger
+  useEffect(() => {
+    if (!peerId || isAI || !sessionUserId) return;
+
+    const notifyTyping = async (typing: boolean) => {
+      try {
+        await fetch('/api/chat/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ peerId, isTyping: typing })
+        });
+      } catch (err) { }
+    };
+
+    if (dmInput.trim().length > 0) {
+      notifyTyping(true);
+      const timeout = setTimeout(() => notifyTyping(false), 3000);
+      return () => clearTimeout(timeout);
+    } else {
+      notifyTyping(false);
+    }
+  }, [dmInput, peerId, isAI, sessionUserId]);
+
   const handleToggleSpeech = useCallback((id: string, text: string) => {
-    // If already speaking this message, stop it
     if (currentlySpeakingId === id) {
       window.speechSynthesis.cancel();
       setCurrentlySpeakingId(null);
       return;
     }
-
-    // Stop anything else first
     window.speechSynthesis.cancel();
-    
-    // Deep clean the text for a pure spoken experience
-    const spokenText = text
-      .replace(/<think>[\s\S]*?<\/think>/g, '') // Strip reasoning
-      .replace(/```[\s\S]*?```/g, '')            // Strip code blocks
-      .replace(/\[\d+\]/g, '')                  // Strip citations
-      .replace(/[#*`_\[\]()~|>]/g, '')          // Strip markdown syntax
-      .replace(/\s+/g, ' ')                     // Normalize whitespace
+
+    const spokenText = (text || '')
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/\[\d+\]/g, '')
+      .replace(/[#*`_\[\]()~|>]/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!spokenText) return;
 
     const utterance = new SpeechSynthesisUtterance(spokenText);
-    
-    // 🧠 ADVANCED NATURAL VOICE HEURISTIC
-    // Priority: Neural/Natural > Google/Microsoft Online > English-US
-    const bestVoice = availableVoices.find(v => 
-      (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Enhanced')) && 
-      v.lang.startsWith('en')
-    ) || availableVoices.find(v => 
-      (v.name.includes('Google') || v.name.includes('Online')) && 
-      v.lang.startsWith('en')
-    ) || availableVoices.find(v => v.lang.startsWith('en-US')) 
-      || availableVoices.find(v => v.lang.startsWith('en'));
-
-    if (bestVoice) utterance.voice = bestVoice;
-    utterance.lang = 'en-US';
-    
-    // Fine-tuning for a softer, more "Tutor" feel
-    utterance.rate = 0.95;  // Slightly slower for clarity
-    utterance.pitch = 1.05; // Slightly higher for a friendly tone
+    const googleUS = availableVoices.find(v => v.name === 'Google US English');
+    const premiumEn = availableVoices.find(v => v.lang === 'en-US' && v.name.includes('Premium'));
+    utterance.voice = premiumEn || googleUS || availableVoices[0] || null;
+    utterance.rate = 1.05;
+    utterance.pitch = 1.02;
 
     utterance.onend = () => setCurrentlySpeakingId(null);
     utterance.onerror = () => setCurrentlySpeakingId(null);
 
     setCurrentlySpeakingId(id);
     window.speechSynthesis.speak(utterance);
-  }, [currentlySpeakingId]);
+  }, [availableVoices, currentlySpeakingId]);
+
 
   // Voice recognition effect — only runs when voice mode is on and not loading
   useEffect(() => {
-    if (!showVoiceMode || isLoading) return;
+    if (!showVoiceMode || isAILoading) return;
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       console.warn("Speech Recognition not supported.");
       return;
@@ -414,7 +547,7 @@ function ChatSessionInner() {
       if (voiceModeRef.current && !window.speechSynthesis.speaking) {
         setTimeout(() => {
           if (voiceModeRef.current && recognitionRef.current === recognition) {
-            try { recognition.start(); } catch (_e) { /* noop */ }
+            try { recognition.start(); } catch (_e) { }
           }
         }, 1000);
       }
@@ -443,587 +576,405 @@ function ChatSessionInner() {
           if ((accumulatedTranscript + currentInterim).trim()) {
             setIsListening(false);
             window.speechSynthesis.cancel();
-            stop();
-            sendMessage({ text: (accumulatedTranscript + currentInterim).trim() });
+            append({ role: 'user', content: (accumulatedTranscript + currentInterim).trim() });
             accumulatedTranscript = '';
-            try { recognition.stop(); } catch(e) {}
+            try { recognition.stop(); } catch (e) { }
           }
-        }, 2000); 
+        }, 2000);
       }
     };
 
-    try { recognition.start(); } catch (_e) { /* noop */ }
+    try { recognition.start(); } catch (_e) { }
 
     return () => {
       if (recognitionRef.current === recognition) {
-        try { recognition.abort(); } catch (_e) { /* noop */ }
+        try { recognition.abort(); } catch (_e) { }
         recognitionRef.current = null;
       }
     };
-  }, [showVoiceMode, isLoading, sendMessage]);
+  }, [showVoiceMode, isAILoading, append]);
 
-  // Pre-load speech synthesis voices (they load async in most browsers)
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
-  useEffect(() => {
-    const loadVoices = () => {
-      voicesRef.current = window.speechSynthesis.getVoices();
-    };
-    loadVoices();
-    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
-    return () => {
-      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
-    };
-  }, []);
-
-  // Text-to-Speech for assistant responses (voice mode only)
+  // Voice TTS effect
   const lastSpokenMsgId = useRef<string>('');
   useEffect(() => {
-    if (!showVoiceMode || isLoading || messages.length === 0) return;
+    if (!showVoiceMode || isAILoading || aiMessages.length === 0) return;
 
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = aiMessages[aiMessages.length - 1];
     if (lastMessage.role !== 'assistant') return;
-    // Avoid speaking the same message twice
     if (lastMessage.id === lastSpokenMsgId.current) return;
     lastSpokenMsgId.current = lastMessage.id;
 
-    // Remove code blocks and markdown symbols before speaking to prevent TTS freezing
     const textToSpeak = getMessageText(lastMessage)
-      .replace(/```[\s\S]*?```/g, '') // Remove all code/mermaid blocks
-      .replace(/[#*`_\[\]()~|>]/g, '') // Remove markdown symbols
-      .replace(/={2,}/g, '') // Remove equals headers (e.g. ===)
-      .replace(/-{2,}/g, ''); // Remove dash combos (e.g. ---)
-      
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/[#*`_\[\]()~|>]/g, '')
+      .replace(/={2,}/g, '')
+      .replace(/-{2,}/g, '');
+
     if (!textToSpeak.trim()) return;
 
-    // Cancel any previous speech before starting new one
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    const voices = voicesRef.current;
-    
-    // Choose the best quality voices available locally, ensuring it MUST be English
-    const englishVoices = voices.filter(v => v.lang.startsWith('en'));
-    const preferredVoice = englishVoices.find(v =>
-      v.name.includes('Online') || // Edge's Natural online voices
-      v.name.includes('Neural') || // Windows Neural voices
-      v.name.includes('Google US English') ||
-      v.name.includes('Samantha') ||
-      v.name.includes('Female')
-    ) || englishVoices[0]; // Fallback to first English voice
+    const googleUS = availableVoices.find(v => v.name === 'Google US English');
+    const premiumEn = availableVoices.find(v => v.lang === 'en-US' && v.name.includes('Premium'));
+    utterance.voice = premiumEn || googleUS || availableVoices[0] || null;
+    utterance.rate = 1.05;
+    utterance.pitch = 1.02;
 
-    if (preferredVoice) utterance.voice = preferredVoice;
-    utterance.lang = 'en-US';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    // When TTS finishes speaking, restart voice recognition
     utterance.onend = () => {
       if (voiceModeRef.current && recognitionRef.current) {
         setTimeout(() => {
           if (voiceModeRef.current) {
-            try { recognitionRef.current?.start(); } catch (_e) { /* noop */ }
+            try { recognitionRef.current?.start(); } catch (_e) { }
           }
         }, 500);
       }
     };
 
     window.speechSynthesis.speak(utterance);
-  }, [isLoading, messages, showVoiceMode]);
+  }, [isAILoading, aiMessages, showVoiceMode, availableVoices]);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    // We use 'auto' instead of 'smooth' here to prevent jittering. 
-    // Smooth scrolling fires repeatedly during streaming chunks, resetting the animation and causing a glitching visual effect!
-    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-  }, [messages]);
-
-  // Stores custom DM messages sent by the user during this session
-  const [dmMessages, setDmMessages] = useState<{id: string, text: string, time: string}[]>([]);
-
-  const handleStartTutor = (e: React.FormEvent) => {
+  // Handle DM dispatch routing
+  const handleSendDM = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!learningGoal.trim()) return;
-    setShowConfig(false);
-    setIsConfigured(true);
-    // Programmatically trigger the first message so the user doesn't have to wait!
-    sendMessage({ text: `Please provide a tutorial on ${learningGoal} at a ${learningDetail} level. Your name is ${tutorName}.` });
-  };
-
-  const handleStartNewSession = () => {
-    (setMessages as any)([]);
-    setLearningGoal('');
-    setIsConfigured(false);
-    setShowConfig(true);
-  };
-
-  // Single ASR button click (non-voice-mode)
-  const handleASR = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert("Speech Recognition is not supported in this browser.");
+    if (isAI) {
+      if (!dmInput.trim() || isAILoading) return;
+      const textToSend = dmInput;
+      setDmInput('');
+      append({ role: 'user', content: textToSend });
       return;
     }
 
-    const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionCtor();
+    if (!dmInput.trim() || !peerId || isLoadingDM) return;
 
-    recognition.lang = navigator.language || 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => setIsListening(true);
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setIsListening(false);
-      if (transcript.trim()) {
-        sendMessage({ text: (input ? input + " " : "") + transcript });
-        setInput('');
-      }
+    const msgPayload = {
+      id: crypto.randomUUID(),
+      content: dmInput,
+      userId: sessionUserId,
+      createdAt: new Date().toISOString(),
+      status: 'SENT'
     };
 
-    recognition.start();
+    setDmInput('');
+    setIsLoadingDM(true);
+
+    // Optimistically update list
+    setDmMessages(prev => [...prev, msgPayload]);
+
+    try {
+      const res = await fetch('/api/chat/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: msgPayload.content, receiverId: peerId })
+      });
+      const data = await res.json();
+
+      // Update optimistic message with real ID and Delivered status
+      setDmMessages(prev => prev.map(m => m.id === msgPayload.id ? { ...m, id: data.id, status: 'DELIVERED' } : m));
+    } catch (error) {
+      setDmMessages(prev => prev.map(m => m.id === msgPayload.id ? { ...m, status: 'FAILED' } : m));
+    } finally {
+      setIsLoadingDM(false);
+    }
   };
 
+  const activeMessages = isAI ? aiMessages : dmMessages;
+
   return (
-    <div className={`flex bg-bg-elevated overflow-hidden shadow-2xl transition-all duration-500 ease-in-out ${
-      isFullscreen 
-        ? 'fixed inset-0 z-50 w-full h-[100dvh] rounded-none mt-0 border-0' 
-        : 'flex-1 max-w-[1400px] w-[95%] mx-auto h-[calc(100vh-60px)] rounded-[2.5rem] border border-border shadow-2xl mt-8 mb-8 relative'
-    }`}>
-      
-      {/* Sidebar / Discussions */}
-      <div className="w-80 border-r border-border bg-bg-secondary flex flex-col flex-shrink-0 hidden md:flex">
-        <div className="p-4 border-b border-border">
-          <h2 className="font-display font-bold text-xl text-text-primary mb-4 flex items-center gap-2">
-            <Users size={20} className="text-primary-500" />
-            Messages
-          </h2>
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input 
-              type="text" 
-              placeholder="Search conversations..." 
-              className="w-full bg-bg-elevated border border-border rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-primary-500 transition-all text-text-primary"
-            />
-          </div>
-        </div>
+    <div className={`p-0 md:p-8 flex items-center justify-center bg-bg-primary transition-all duration-300 w-full ${isFullscreen ? 'fixed inset-0 z-[100] h-screen p-0 m-0 bg-bg-secondary' : 'h-[calc(100vh-4rem)]'}`}>
+      <div className={`flex w-full h-full bg-bg-secondary border border-border shadow-2xl overflow-hidden transition-all duration-300 ${isFullscreen ? 'rounded-none max-w-none border-none' : 'max-w-[1400px] rounded-2xl'}`}>
 
-        <div className="flex-1 overflow-y-auto">
-          {/* AI Interactive Tutor */}
-          <div className="px-3 pt-4 pb-2">
-            <span className="text-xs font-bold text-text-muted uppercase tracking-wider pl-2">Learning Assistants</span>
-          </div>
-          <Link href="/sessions/chat?ai=true" className={`flex items-center gap-3 p-3 mx-2 rounded-xl transition-colors group ${isAI ? 'bg-primary-100 dark:bg-neutral-800 border-primary-500 border dark:border-primary-600' : 'hover:bg-bg-elevated border border-transparent'}`}>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-sm relative">
-              <Bot size={20} />
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <div className="flex justify-between items-baseline mb-1">
-                <h3 className={`font-bold transition-colors text-sm ${isAI ? 'text-primary-900 dark:text-primary-400' : 'text-text-primary group-hover:text-primary-600'}`}>Lumina</h3>
-              </div>
-              <p className={`text-xs truncate ${isAI ? 'text-primary-700 dark:text-primary-300' : 'text-text-secondary'}`}>Web-search & FastRTC enabled...</p>
-            </div>
-          </Link>
+        {/* Chat Sidebar */}
+        <ChatSidebar
+          currentPeerId={peerId || (isAI ? 'test-peer-id' : '')}
+          onlineUsers={onlineUsers}
+          userId={sessionUserId}
+        />
 
-          {/* DMs */}
-          <div className="px-3 pt-6 pb-2">
-            <span className="text-xs font-bold text-text-muted uppercase tracking-wider pl-2">Direct Messages</span>
-          </div>
-          
-          <Link href="/sessions/chat" className={`flex items-center gap-3 p-3 mx-2 rounded-xl cursor-pointer transition-colors ${!isAI ? 'bg-bg-elevated shadow-sm border border-border' : 'hover:bg-bg-elevated border border-transparent'}`}>
-            <div className="relative">
-              <img src="https://i.pravatar.cc/150?u=4920" alt="Alexis" className="w-10 h-10 rounded-full shrink-0 border border-border object-cover" />
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <div className="flex justify-between items-baseline mb-1">
-                <h3 className="font-bold text-text-primary text-sm">Alexis</h3>
-                <span className="text-[10px] text-text-muted">12:30 PM</span>
-              </div>
-              <p className="text-xs text-text-secondary truncate font-medium">Hey! I saw your profile...</p>
-            </div>
-          </Link>
-        </div>
-      </div>
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col h-full relative">
 
-      {/* Main Area */}
-      <div className="flex-1 flex flex-col relative w-full">
-        {/* Header */}
-        <div className="p-4 border-b border-border flex items-center justify-between bg-bg-elevated/80 backdrop-blur-md z-10 sticky top-0">
-          <div className="flex items-center gap-3">
-            <Link href="/requests" className="md:hidden text-text-muted hover:text-primary-500 transition-colors mr-2">
-              <ChevronLeft size={24} />
-            </Link>
-            
-            {isAI ? (
-               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-sm relative">
-                 <Bot size={20} />
-                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-               </div>
-            ) : (
-              <div className="relative group">
-                <img src="https://i.pravatar.cc/150?u=4920" alt="Alexis" className="w-10 h-10 rounded-full shrink-0 border-2 border-white shadow-sm object-cover" />
-                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-              </div>
-            )}
+          {/* Top Header */}
+          <div className="h-[72px] border-b border-border bg-bg-elevated px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard" className="md:hidden text-text-muted hover:text-text-primary p-2 bg-bg-secondary rounded-full">
+                <ChevronLeft size={20} />
+              </Link>
 
-            <div>
-              <h2 className="font-bold text-[17px] text-text-primary leading-tight">{isAI ? tutorName : "Alexis"}</h2>
-              <p className="text-[12px] text-primary-600 font-medium">Online</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {isAI && (
-              <button 
-                className="p-2.5 text-text-muted hover:bg-bg-secondary rounded-full transition-colors hidden md:flex items-center gap-1.5"
-                onClick={handleStartNewSession}
-                title="Start New Session"
-              >
-                <Plus size={18} />
-              </button>
-            )}
-            <button 
-              className="p-2.5 text-text-muted hover:bg-bg-secondary rounded-full transition-colors"
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
-            >
-              {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-            </button>
-            <button 
-              className="p-2.5 text-white bg-primary-500 hover:bg-primary-600 rounded-full transition-colors shadow-sm ml-1" 
-              title={isAI ? "Start Voice 2 Voice Mode" : "Voice Call"}
-              onClick={() => isAI && setShowVoiceMode(true)}
-            >
-              <Phone size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Voice 2 Voice Full Modal Overlay */}
-        {isAI && showVoiceMode && (
-          <div className="absolute inset-0 bg-bg-elevated/95 backdrop-blur-xl z-40 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-200">
-            
-            <div className="relative mb-12 flex items-center justify-center">
-              {/* Outer pulsing rings when listening */}
-              {isListening && (
-                 <>
-                   <div className="absolute w-48 h-48 rounded-full bg-primary-500/10 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-                   <div className="absolute w-40 h-40 rounded-full bg-primary-500/20 animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-                 </>
-              )}
-              {/* Central Orb */}
-              <div className={`w-32 h-32 rounded-full shadow-2xl shadow-primary-500/30 flex items-center justify-center relative z-10 transition-all duration-500 ${isListening ? 'bg-gradient-to-br from-primary-400 to-amber-600 scale-105' : 'bg-bg-secondary border-2 border-primary-500/50'}`}>
-                {isListening ? (
-                   <Mic size={50} className="text-white animate-pulse" />
-                ) : (
-                   <Bot size={50} className="text-primary-500" />
-                )}
+              <div className="flex items-center gap-3">
+                <div className="relative group">
+                  <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 border-2 border-white shadow-sm overflow-hidden ${isAI ? 'bg-gradient-to-br from-primary-400 to-amber-600' : 'bg-primary-100 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
+                    }`}>
+                    {isAI ? <Bot size={22} className="text-white" /> : (
+                      selectedUser?.avatarUrl ? <img src={selectedUser.avatarUrl} alt="" className="w-full h-full object-cover" /> : <Users size={20} />
+                    )}
+                  </div>
+                  {isAI || (onlineUsers.has(peerId)) ? (
+                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+                  ) : (
+                    peerId && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-gray-400 border-2 border-white rounded-full"></div>
+                  )}
+                </div>
+                <div>
+                  <h2 className="font-display font-extrabold text-lg leading-tight flex items-center gap-2">
+                    {isAI ? tutorName : (selectedUser?.name || 'Peer Connection')}
+                    {isAI && <span className="bg-primary-100 text-primary-700 text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded leading-none dark:bg-primary-900/40 dark:text-primary-300">AI</span>}
+                  </h2>
+                  <p className="text-xs text-text-muted font-medium flex items-center gap-1.5">
+                    {isAI ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                        Always Online
+                      </span>
+                    ) : (
+                      onlineUsers.has(peerId) ? (
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                          Online Now
+                        </span>
+                      ) : (
+                        <span>Offline</span>
+                      )
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
-            
-            <h2 className="text-4xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary-500 to-amber-400 tracking-tight mb-3">{tutorName} Voice</h2>
-            <div className="text-2xl font-mono text-primary-500 font-bold mb-6">{formatDuration(callDuration)}</div>
-            
-            <div className="px-5 py-2.5 bg-bg-secondary/80 backdrop-blur-md rounded-full border border-border shadow-sm flex items-center gap-3">
-               <span className="relative flex h-3 w-3">
-                 <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isListening ? 'bg-red-400 animate-ping' : 'bg-primary-400'}`}></span>
-                 <span className={`relative inline-flex rounded-full h-3 w-3 ${isListening ? 'bg-red-500' : 'bg-primary-500'}`}></span>
-               </span>
-               <p className="text-text-secondary font-medium">
-                 {isListening ? 'Listening... Just speak to barge in!' : isLoading ? `${tutorName} is thinking...` : 'Waiting...'}
-               </p>
-            </div>
-            
-            <div className="absolute bottom-16 w-full flex justify-center gap-6">
-               <button 
-                 className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95" 
-                 onClick={stopVoiceMode}
-                 title="End Call"
-               >
-                 <Phone size={24} className="rotate-[135deg]" />
-               </button>
-            </div>
-            
-            <div className="absolute bottom-8 text-xs text-text-muted text-center max-w-sm">
-               Voice mode continuously performs full-duplex conversations. Speak naturally and you can interrupt {tutorName} at any time.
-            </div>
-          </div>
-        )}
 
-        {/* AI Tutor Setup Modal / Overlay */}
-        {isAI && showConfig && (
-          <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] z-[60] flex items-center justify-center p-6">
-            <form onSubmit={handleStartTutor} className="bg-bg-elevated border border-border shadow-2xl rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in-95 duration-200 relative">
-              {messages.length > 0 && (
-                <button 
-                  type="button" 
-                  onClick={() => setShowConfig(false)}
-                  className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition-colors"
+            <div className="flex items-center gap-2">
+              {!isAI && peerId && (
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  className="p-2.5 text-text-muted hover:bg-bg-secondary rounded-full hover:text-primary-500 transition-all active:scale-95"
+                  title="Schedule a Session"
                 >
-                  <X size={20} />
+                  <Calendar size={20} />
                 </button>
               )}
-              <h3 className="text-xl font-display font-bold mb-2">Configure Tutor</h3>
-              <p className="text-sm text-text-secondary mb-6">Let me know what you want to learn, and how deep we should go. I&apos;ll configure my context constraints for the optimal tutoring session!</p>
-              
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-bold text-text-primary mb-1">Tutor Name</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={tutorName}
-                    onChange={(e) => setTutorName(e.target.value)}
-                    placeholder="e.g. Lumina, Einstein" 
-                    className="w-full bg-bg-secondary border border-border rounded-xl p-3 text-[14px]"
-                  />
+              {isAI && (
+                <button
+                  onClick={() => setShowVoiceMode(true)}
+                  className={`p-2.5 rounded-full transition-all shadow-sm ${showVoiceMode ? 'bg-primary-500 text-white shadow-primary-500/20 animate-pulse' : 'bg-primary-500 hover:bg-primary-600 text-white shadow-primary-500/20 hover:scale-105 active:scale-95'}`}
+                  title="Enter Voice Mode"
+                >
+                  <Phone size={20} />
+                </button>
+              )}
+              <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2.5 text-text-muted hover:bg-bg-secondary rounded-full hover:text-text-primary hidden md:block transition-all active:scale-95">
+                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-1 overflow-hidden relative">
+
+            {/* Voice 2 Voice Full Modal Overlay */}
+            {isAI && showVoiceMode && (
+              <div className="absolute inset-0 bg-bg-elevated/95 backdrop-blur-xl z-40 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-200">
+                <div className="relative mb-12 flex items-center justify-center">
+                  {/* Outer pulsing rings when listening */}
+                  {isListening && (
+                    <>
+                      <div className="absolute w-48 h-48 rounded-full bg-primary-500/10 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
+                      <div className="absolute w-40 h-40 rounded-full bg-primary-500/20 animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
+                    </>
+                  )}
+                  {/* Central Orb */}
+                  <div className={`w-32 h-32 rounded-full shadow-2xl shadow-primary-500/30 flex items-center justify-center relative z-10 transition-all duration-500 ${isListening ? 'bg-gradient-to-br from-primary-400 to-amber-600 scale-105' : 'bg-bg-secondary border-2 border-primary-500/50'}`}>
+                    {isListening ? (
+                      <Mic size={50} className="text-white animate-pulse" />
+                    ) : (
+                      <Bot size={50} className="text-primary-500" />
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-text-primary mb-1">Learning Topic</label>
-                  <input 
-                    type="text" 
-                    required
-                    value={learningGoal}
-                    onChange={(e) => setLearningGoal(e.target.value)}
-                    placeholder="e.g. React Server Components, Next.js Middleware" 
-                    className="w-full bg-bg-secondary border border-border rounded-xl p-3 text-[14px]"
-                  />
+                <div className="flex bg-primary-500/10 rounded-full px-4 py-1.5 border border-primary-500/20 mb-6 animate-pulse">
+                  <div className="text-[10px] font-bold text-primary-500 uppercase tracking-widest">Voice Interaction Enabled</div>
                 </div>
-                
-                <div>
-                  <label className="block text-sm font-bold text-text-primary mb-1">Detail Level</label>
-                  <select 
-                    value={learningDetail}
-                    onChange={(e) => setLearningDetail(e.target.value)}
-                    className="w-full bg-bg-secondary border border-border rounded-xl p-3 text-[14px]"
+
+                <h2 className="text-4xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary-500 to-amber-400 tracking-tight mb-3">{tutorName} Voice</h2>
+                <div className="text-2xl font-mono text-primary-500 font-bold mb-6">{formatDuration(callDuration)}</div>
+
+                <div className="px-5 py-2.5 bg-bg-secondary/80 backdrop-blur-md rounded-full border border-border shadow-sm flex items-center gap-3">
+                  <span className="relative flex h-3 w-3">
+                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isListening ? 'bg-red-400 animate-ping' : 'bg-primary-400'}`}></span>
+                    <span className={`relative inline-flex rounded-full h-3 w-3 ${isListening ? 'bg-red-500' : 'bg-primary-500'}`}></span>
+                  </span>
+                  <p className="text-text-secondary font-medium">
+                    {isListening ? 'Listening... Just speak to barge in!' : isAILoading ? `${tutorName} is thinking...` : 'Waiting...'}
+                  </p>
+                </div>
+
+                {/* Call Controls */}
+                <div className="mt-12 flex items-center gap-8">
+                  <button
+                    className="w-16 h-16 rounded-full bg-red-500/10 border-2 border-red-500/20 hover:bg-red-500 text-red-500 hover:text-white flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-90 group"
+                    onClick={stopVoiceMode}
+                    title="End Call"
                   >
-                    <option value="Beginner (ELI5)">Beginner (ELI5)</option>
-                    <option value="Intermediate">Intermediate Guidance</option>
-                    <option value="Advanced (Deep Dive code)">Advanced (Deep Dive)</option>
-                  </select>
+                    <Phone size={24} className="rotate-[135deg] group-hover:animate-shake" />
+                  </button>
+                </div>
+
+                <div className="absolute bottom-10 text-xs text-text-muted text-center max-w-sm px-6">
+                  Voice mode continuously performs full-duplex conversations. Speak naturally and you can interrupt {tutorName} at any time.
                 </div>
               </div>
-              
-              <button 
-                type="button"
-                onClick={handleStartTutor}
-                className="w-full bg-primary-500 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 hover:bg-primary-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!learningGoal}
-              >
-                <PlayCircle size={18} />
-                Start AI Session
-              </button>
+            )}
+
+            {/* Start Screen Overlay */}
+            {isAI && !isConfigured && aiMessages.length === 0 && (
+              <div className="absolute inset-0 bg-bg-secondary/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-8 text-center border-l border-white/5">
+                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shadow-2xl mb-6 shadow-primary-500/20">
+                  <Brain size={40} />
+                </div>
+                <h2 className="text-3xl font-display font-extrabold mb-3 text-text-primary">Configure Your AI Tutor</h2>
+                <p className="text-text-secondary max-w-md mb-8 text-sm">Before we begin, tell Lumina what you want to learn so it can adapt to your skill level and goals.</p>
+                <button onClick={() => setShowConfig(true)} className="px-8 py-3.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl font-bold shadow-lg shadow-primary-500/20 active:scale-95 transition-all w-full max-w-sm">
+                  Set Learning Goal
+                </button>
+              </div>
+            )}
+
+            {/* Chat Messages */}
+            <MessageList
+              messages={activeMessages}
+              isAI={isAI}
+              sessionUserId={sessionUserId}
+              tutorName={tutorName}
+              learningGoal={learningGoal}
+              learningDetail={learningDetail}
+              currentlySpeakingId={currentlySpeakingId}
+              onToggleSpeech={handleToggleSpeech}
+              markdownComponents={markdownComponents}
+              getMessageText={getMessageText}
+              isConfigured={isConfigured}
+              peerImage={selectedUser?.avatarUrl}
+              userImage={currentUser?.avatarUrl}
+              isPeerTyping={isPeerTyping}
+              peerName={selectedUser?.name}
+            />
+
+            {/* Config Sidebar (for AI mode) */}
+            {isAI && showConfig && (
+              <div className="w-[320px] bg-bg-elevated border-l border-border flex flex-col shrink-0 animate-in slide-in-from-right h-full z-30 absolute right-0 sm:relative shadow-2xl sm:shadow-none">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                  <h3 className="font-bold">Tutor Settings</h3>
+                  <button onClick={() => setShowConfig(false)} className="p-1 rounded bg-bg-secondary hover:text-text-primary transition-colors"><X size={16} /></button>
+                </div>
+                <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                  <div>
+                    <label className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 block">Learning Goal</label>
+                    <input type="text" className="w-full bg-bg-secondary border border-border rounded-lg p-2.5 text-sm outline-none focus:ring-2 ring-primary-500/20" value={learningGoal} onChange={(e) => setLearningGoal(e.target.value)} placeholder="e.g. Master React Hooks" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 block">Skill Level</label>
+                    <select className="w-full bg-bg-secondary border border-border rounded-lg p-2.5 text-sm outline-none focus:ring-2 ring-primary-500/20" value={learningDetail} onChange={(e) => setLearningDetail(e.target.value)}>
+                      <option value="Beginner">Beginner</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => { setIsConfigured(true); setShowConfig(false); }}
+                    className="w-full py-2.5 bg-primary-500 text-white rounded-lg font-bold hover:bg-primary-600 transition-colors shadow-sm"
+                  >
+                    Start Session
+                  </button>
+                  {isAI && (
+                    <div className="pt-4 mt-4 border-t border-border">
+                      <label className="flex items-center gap-2 cursor-pointer group">
+                        <input type="checkbox" checked={isReasoningMode} onChange={(e) => setIsReasoningMode(e.target.checked)} className="rounded border-border text-primary-500 focus:ring-primary-500" />
+                        <span className="text-sm font-medium text-text-primary group-hover:text-primary-500 transition-colors">Thinking Mode (Reasoning)</span>
+                      </label>
+                      <p className="text-[10px] text-text-muted mt-2">Enables step-by-step logical reasoning before responding.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Input Area */}
+          <div className="p-4 bg-bg-elevated border-t border-border sticky bottom-0 z-10">
+            <form onSubmit={handleSendDM} className="max-w-4xl mx-auto w-full">
+              <div className="bg-bg-secondary border border-border rounded-2xl shadow-sm p-1.5 flex items-center gap-1 focus-within:ring-2 ring-primary-500/20 transition-all">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleFileUpload}
+                />
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 md:p-3 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none">
+                  {isUploading ? <span className="w-4 h-4 rounded-full border-2 border-text-muted border-t-text-primary animate-spin block"></span> : <Paperclip size={20} />}
+                </button>
+
+                {isAI && (
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowVoiceMode(true)}
+                      className="p-2.5 text-text-muted hover:text-primary-500 hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none"
+                      title="Voice Message (ASR)"
+                    >
+                      <Mic size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsReasoningMode(!isReasoningMode)}
+                      className={`p-2.5 transition-colors rounded-xl ${isReasoningMode ? 'text-amber-500' : 'text-text-muted hover:text-amber-600'}`}
+                      title="Thinking Mode"
+                    >
+                      <Brain size={18} />
+                    </button>
+                  </div>
+                )}
+
+                <input
+                  autoFocus
+                  className="flex-1 bg-transparent border-none py-3 px-2 text-[15px] outline-none text-text-primary min-w-0"
+                  placeholder={isAI ? "Ask Lumina anything..." : "Message your peer..."}
+                  value={dmInput}
+                  onChange={(e) => setDmInput(e.target.value)}
+                  disabled={isAI && !isConfigured}
+                />
+                <button
+                  type="submit"
+                  disabled={!dmInput.trim() || isAILoading || isLoadingDM || (isAI && !isConfigured)}
+                  className={`p-2.5 md:p-3 rounded-xl transition-all shrink-0 ml-1 outline-none ${(dmInput.trim() || isAILoading) ? 'bg-primary-500 text-white shadow-md' : 'bg-transparent text-text-muted'}`}
+                >
+                  {isAILoading ? (
+                    <span className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin block"></span>
+                  ) : (
+                    <Send size={20} className={dmInput.trim() ? 'translate-x-0.5' : ''} />
+                  )}
+                </button>
+              </div>
             </form>
           </div>
-        )}
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-bg-secondary w-full">
-          <div className="flex flex-col items-center my-6">
-            <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider bg-bg-elevated border border-border px-3 py-1 rounded-full shadow-sm">
-              Today
-            </span>
-          </div>
-
-          {!isAI ? (
-            <>
-               <div className="flex items-start gap-3 max-w-[85%]">
-                <img src="https://i.pravatar.cc/150?u=4920" alt="Alexis" className="w-8 h-8 rounded-full shrink-0 object-cover border border-border shadow-sm mt-1" />
-                <div className="flex flex-col gap-1 items-start">
-                  <div className="bg-bg-elevated border border-border text-text-primary p-3.5 rounded-2xl rounded-tl-sm shadow-sm text-[14px] leading-relaxed">
-                    &quot;Hey! I saw your profile and was wondering if you&apos;re open to a different trade? I can offer some help with Marketing if you can teach me React.&quot;
-                  </div>
-                  <span className="text-[10px] text-text-muted ml-1">12:30 PM</span>
-                </div>
-              </div>
-              
-              {dmMessages.map((msg) => (
-                <div key={msg.id} className="flex items-start gap-3 max-w-[85%] ml-auto flex-row-reverse">
-                   <div className="w-8 h-8 rounded-full bg-bg-secondary flex items-center justify-center shrink-0 mt-1 shadow-sm border border-border">
-                      <Users size={16} className="text-text-muted" />
-                   </div>
-                   <div className="flex flex-col gap-1 items-end">
-                     <div className="p-3.5 rounded-2xl shadow-sm text-[14px] leading-relaxed max-w-full bg-primary-500 text-white rounded-tr-sm">
-                        {msg.text}
-                     </div>
-                     <span className="text-[10px] text-text-muted mr-1">{msg.time}</span>
-                   </div>
-                </div>
-              ))}
-            </>
-          ) : (
-            isConfigured && messages.length === 0 && (
-              <div className="flex items-start gap-3 max-w-[85%]">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shrink-0 mt-1 shadow-sm">
-                  <Bot size={16} />
-                </div>
-                <div className="bg-bg-elevated border border-border text-text-primary p-3.5 rounded-2xl rounded-tl-sm shadow-sm text-[14px] leading-relaxed prose prose-sm max-w-full dark:prose-invert prose-p:text-text-primary prose-strong:text-text-primary prose-headings:text-text-primary prose-a:text-primary-500">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={markdownComponents}
-                  >
-                    {`Namaste! 🙏 I am **${tutorName}**. I am ready to guide you on **${learningGoal || "your chosen topic"}** at a *${learningDetail}* level. Send me a message whenever you are ready to begin our session!`}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )
-          )}
-
-          {isAI && messages.map(m => (
-            <div key={m.id} className={`flex items-start gap-3 max-w-[85%] ${m.role === 'user' ? 'ml-auto flex-row-reverse' : ''}`}>
-               {m.role === 'assistant' ? (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shrink-0 mt-1 shadow-sm">
-                    <Bot size={16} />
-                  </div>
-               ) : (
-                 <div className="w-8 h-8 rounded-full bg-bg-secondary flex items-center justify-center shrink-0 mt-1 shadow-sm border border-border">
-                    <Users size={16} className="text-text-muted" />
-                 </div>
-               )}
-               <div className={`py-2.5 px-3.5 rounded-2xl shadow-sm text-[14px] leading-relaxed prose prose-sm max-w-full dark:prose-invert prose-p:text-text-primary prose-strong:text-text-primary prose-headings:text-text-primary prose-a:text-primary-500 ${m.role === 'user' ? 'bg-primary-500 text-white rounded-tr-sm prose-p:text-white prose-strong:text-white' : 'bg-bg-elevated border border-border text-text-primary rounded-tl-sm'}`}>
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={markdownComponents}
-                  >
-                    {getMessageText(m)}
-                  </ReactMarkdown>
-
-                  {m.role === 'assistant' && (
-                     <div className="mt-2 flex justify-end">
-                       <button 
-                         onClick={() => handleToggleSpeech(m.id, getMessageText(m))}
-                         className={`text-text-muted hover:text-primary-500 transition-all duration-300 bg-bg-secondary p-1.5 rounded-full shadow-sm hover:shadow-md ${currentlySpeakingId === m.id ? 'ring-2 ring-primary-500 text-primary-500 bg-primary-500/10 animate-pulse' : ''}`} 
-                         title={currentlySpeakingId === m.id ? "Stop Reading" : "Read Aloud"}
-                       >
-                         {currentlySpeakingId === m.id ? <Square size={14} fill="currentColor" /> : <Volume2 size={14} />}
-                       </button>
-                     </div>
-                  )}
-               </div>
-            </div>
-          ))}
-          {/* Invisible element to auto-scroll to */}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Area (Fixed Placement) */}
-        <div className="p-4 bg-bg-elevated border-t border-border mt-auto relative">
-          
-          {parsedDoc && (
-            <div className="absolute -top-10 left-4 bg-green-500/10 border border-green-500/20 text-green-600 text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-2 max-w-[80%] shadow-sm">
-               <Paperclip size={12} />
-               <span className="truncate">{parsedDoc.name} (Ready)</span>
-               <button onClick={() => setParsedDoc(null)} className="hover:text-red-500 ml-1 bg-white/20 rounded-full p-0.5"><X size={10} /></button>
-            </div>
-          )}
-
-          {isLoading && !parsedDoc && (
-            <div className="absolute -top-7 left-6 text-xs text-text-muted flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary-500 animate-pulse block"></span>
-              Lumina is typing...
-            </div>
-          )}
-
-          <form onSubmit={isAI ? handleSubmit : (e) => e.preventDefault()} className="flex items-center p-1.5 bg-bg-secondary border border-border rounded-[1.5rem] focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100 transition-all shadow-sm">
-            <button 
-              type="button" 
-              disabled={!isAI}
-              onClick={() => setShowConfig(true)}
-              className="p-3 text-text-muted hover:text-primary-600 transition-colors rounded-full disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Configure AI Options"
-            >
-              <Settings2 size={20} />
-            </button>
-            
-            {isAI && (
-              <>
-                <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.txt,.md,.json,.csv,.doc,.docx,image/*" onChange={handleFileUpload} />
-                <button type="button" onClick={() => fileInputRef.current?.click()} className={`p-2.5 mx-1 transition-colors rounded-full ${parsedDoc ? 'bg-green-500/10 text-green-500' : 'text-text-muted hover:text-primary-600'}`} title="Attach PDF, Word, Data, or Image Context">
-                   <Paperclip size={18} className={isUploading ? "animate-spin opacity-50" : ""} />
-                </button>
-                <button type="button" onClick={() => setIsReasoningMode(!isReasoningMode)} className={`p-2.5 mr-2 transition-colors rounded-full ${isReasoningMode ? 'bg-amber-500/20 text-amber-500 shadow-sm' : 'text-text-muted hover:text-amber-600'}`} title="Toggle Thinking Mode">
-                   <Brain size={18} />
-                </button>
-              </>
-            )}
-
-            <input 
-              type="text"
-              name="chat-input"
-              value={isAI ? (input || "") : dmInput}
-              onChange={isAI ? handleInputChange : (e) => setDmInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (isAI) {
-                    if (!learningGoal.trim()) {
-                      setShowConfig(true);
-                      return;
-                    }
-                    if (input && input.trim() && !isLoading) {
-                      handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
-                    }
-                  } else if (!isAI && dmInput && dmInput.trim()) {
-                    setDmMessages(prev => [...prev, { id: Date.now().toString(), text: dmInput, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-                    setDmInput("");
-                  }
-                }
-              }}
-              placeholder={!learningGoal && isAI ? "First, set a topic..." : "Message or Start Voice Mode..."} 
-              className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-[14px] min-w-0 placeholder:text-text-muted px-2"
-            />
-            {isAI && !showConfig && (
-              <button 
-                type="button" 
-                onClick={handleASR}
-                className={`p-2.5 mr-1 transition-colors rounded-full ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-primary-100 text-primary-600 hover:bg-primary-200'}`}
-                title="Start Voice to Text"
-              >
-                <Mic size={18} />
-              </button>
-            )}
-            <button 
-              type="submit" 
-              disabled={(isAI && (!input || showConfig || isLoading)) || (!isAI && !dmInput)}
-              onClick={(e) => { 
-                if (!isAI) { 
-                  e.preventDefault(); 
-                  if (dmInput.trim()) {
-                    setDmMessages(prev => [...prev, { id: Date.now().toString(), text: dmInput, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-                    setDmInput(""); 
-                  }
-                } 
-              }}
-              className="w-10 h-10 bg-primary-500 text-white rounded-full flex items-center justify-center hover:bg-primary-600 transition-colors shrink-0 shadow-sm ml-1 disabled:opacity-50 disabled:bg-bg-secondary disabled:text-text-muted"
-            >
-              <Send size={16} className="translate-x-[1px]" />
-            </button>
-          </form>
-          <div className="text-center mt-2">
-            <p className="text-[10px] text-text-muted">
-              {isAI ? "Lumina supports Markdown & Real-time streaming. Press Enter to send." : "Press Enter to send. For AI Tutor, choose the assistant in the sidebar."}
-            </p>
-          </div>
         </div>
       </div>
+
+      {/* Schedule Form Modal */}
+      <ScheduleMeetModal
+        open={showScheduleModal}
+        onOpenChange={setShowScheduleModal}
+        receiverId={peerId}
+        onScheduleSuccess={(message) => {
+          setDmMessages(prev => [...prev, message]);
+        }}
+      />
     </div>
   );
 }
 
-export default function ChatSession() {
+export default function ChatSessionPage() {
   return (
-    <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center h-screen">
-        <div className="animate-pulse text-text-muted">Loading chat...</div>
-      </div>
-    }>
+    <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-bg-primary"><span className="w-8 h-8 rounded-full border-4 border-border border-t-primary-500 animate-spin"></span></div>}>
       <ChatSessionInner />
     </Suspense>
   );

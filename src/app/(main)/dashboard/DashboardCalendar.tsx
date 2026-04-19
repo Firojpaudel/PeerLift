@@ -1,39 +1,37 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Calendar from 'react-calendar';
 import { format, isSameDay } from 'date-fns';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Video } from 'lucide-react';
 import Link from 'next/link';
 
-export function DashboardCalendar() {
+interface DashboardCalendarProps {
+  sessions: any[];
+}
+
+export function DashboardCalendar({ sessions }: DashboardCalendarProps) {
   const [date, setDate] = useState<Date>(new Date());
 
-  // Mock sessions data - later fetch from your API
-  const mockSessions = [
-    {
-      id: "1",
-      date: new Date(new Date().setHours(14, 0, 0, 0)),
-      title: "React Mentoring with Jane",
-      duration: 60,
-      link: "https://meet.google.com/abc-defg-hij"
-    },
-    {
-      id: "2",
-      date: new Date(new Date().setDate(new Date().getDate() + 2)), // 2 days from now
-      title: "Learning Spanish from Carlos",
-      duration: 45,
-      link: null // Pending link
-    }
-  ];
+  // Map DB sessions to local format
+  const formattedSessions = useMemo(() => {
+    return sessions.map(s => ({
+      id: s.id,
+      date: new Date(s.scheduledAt),
+      title: s.role === 'mentor' ? `Teaching ${s.request.requestedSkill.name}` : `Learning ${s.request.offeredSkill.name}`,
+      duration: s.duration,
+      link: s.meetLink,
+      partner: s.role === 'mentor' ? s.learner.name : s.mentor.name
+    }));
+  }, [sessions]);
 
   // Find sessions for selected date
-  const selectedDaySessions = mockSessions.filter(session => isSameDay(session.date, date));
+  const selectedDaySessions = formattedSessions.filter(session => isSameDay(session.date, date));
 
   // Function to highlight days with sessions
-  const tileContent = ({ date, view }: { date: Date, view: string }) => {
+  const tileContent = ({ date: tileDate, view }: { date: Date, view: string }) => {
     if (view === 'month') {
-      const hasSessions = mockSessions.some(session => isSameDay(session.date, date));
+      const hasSessions = formattedSessions.some(session => isSameDay(session.date, tileDate));
       if (hasSessions) {
         return <div className="w-1.5 h-1.5 bg-primary-500 rounded-full mx-auto mt-1 absolute bottom-1 left-1/2 -translate-x-1/2" />;
       }
@@ -43,7 +41,6 @@ export function DashboardCalendar() {
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Custom styled React Calendar */}
       <div className="calendar-wrapper bg-bg-elevated rounded-t-2xl p-4">
         <Calendar 
           onChange={(v) => setDate(v as Date)} 
@@ -54,7 +51,6 @@ export function DashboardCalendar() {
           next2Label={null}
           prev2Label={null}
           tileClassName={({ date: tileDate, view }) => {
-             // Basic styling classes for tiles
              let classes = "text-sm font-medium relative transition-colors ";
              if (view === 'month' && isSameDay(tileDate, date)) {
                classes += "bg-primary-500 text-white hover:bg-primary-600 hover:text-white !font-bold ";
@@ -67,7 +63,6 @@ export function DashboardCalendar() {
         />
       </div>
 
-      {/* Selected Day Schedule */}
       <div className="bg-bg-elevated rounded-b-2xl p-4">
         <h3 className="font-display font-bold text-text-primary mb-4 text-lg flex items-center justify-between">
           <span>{format(date, 'MMMM d, yyyy')}</span>
@@ -81,7 +76,10 @@ export function DashboardCalendar() {
             {selectedDaySessions.map(session => (
               <div key={session.id} className="p-4 rounded-xl border border-border-strong bg-bg-secondary flex flex-col gap-3 group hover:border-primary-300 transition-colors">
                 <div className="flex justify-between items-start">
-                  <h4 className="font-bold text-text-primary">{session.title}</h4>
+                  <div>
+                    <h4 className="font-bold text-text-primary">{session.title}</h4>
+                    <p className="text-xs text-text-secondary">with {session.partner}</p>
+                  </div>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-secondary-600 dark:text-secondary-400 bg-secondary-50 dark:bg-secondary-900/30 px-2 py-0.5 rounded-md">
                     <Clock size={12} />
                     {format(session.date, 'h:mm a')}

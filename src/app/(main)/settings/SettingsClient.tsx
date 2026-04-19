@@ -1,14 +1,120 @@
 "use client";
 
-import { useState } from 'react';
-import { User, Shield, Bell, Monitor } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { User, Shield, Bell, Monitor, Camera, Loader2 } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { toast } from 'sonner';
 
 type Tab = 'profile' | 'security' | 'notifications' | 'preferences';
 
 export function SettingsClient() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const { theme, setTheme } = useTheme();
+  const avatarUrlRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [profileData, setProfileData] = useState<any>({
+    name: '',
+    bio: '',
+    avatarUrl: '',
+    email: ''
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/user/profile')
+      .then(res => res.json())
+      .then(data => {
+        setProfileData({
+          name: data.name || '',
+          bio: data.bio || '',
+          avatarUrl: data.avatarUrl || '',
+          email: data.email || ''
+        });
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setIsLoading(false);
+      });
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profileData.name,
+          bio: profileData.bio,
+          avatarUrl: profileData.avatarUrl
+        })
+      });
+      if (res.ok) {
+        toast.success("Profile updated successfully!");
+      } else {
+        toast.error("Failed to update profile.");
+      }
+    } catch (error) {
+      toast.error("An error occurred.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const downscaleImage = (dataUrl: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 150;
+        const MAX_HEIGHT = 150;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+       toast.error("Please select an image file.");
+       return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const result = event.target?.result as string;
+      const downscaled = await downscaleImage(result);
+      setProfileData({ ...profileData, avatarUrl: downscaled });
+      toast.success("Image selected and optimized!");
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 max-w-4xl mx-auto w-full">
@@ -65,25 +171,83 @@ export function SettingsClient() {
         {activeTab === 'profile' && (
           <>
             <section className="bg-bg-elevated rounded-2xl border border-border p-6 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <h2 className="text-xl font-bold text-text-primary mb-4">Personal Information</h2>
-              <form className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-text-secondary">First Name</label>
-                    <input type="text" defaultValue="Jane" className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
+              <h2 className="text-xl font-bold text-text-primary mb-6">Profile Settings</h2>
+              
+              <div className="flex flex-col md:flex-row items-center gap-6 mb-8 pb-8 border-b border-border">
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-2xl bg-primary-100 border-2 border-dashed border-primary-300 flex items-center justify-center overflow-hidden shadow-inner group-hover:border-primary-500 transition-colors">
+                    {profileData.avatarUrl ? (
+                      <img src={profileData.avatarUrl} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={32} className="text-primary-400" />
+                    )}
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-text-secondary">Last Name</label>
-                    <input type="text" defaultValue="Doe" className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" />
-                  </div>
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="absolute -bottom-2 -right-2 p-2 bg-primary-500 text-white rounded-xl shadow-lg border-2 border-white cursor-pointer hover:bg-primary-600 transition-colors"
+                  >
+                    <Camera size={16} />
+                  </button>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleFileChange}
+                  />
                 </div>
+                <div className="flex-1 space-y-1 text-center md:text-left">
+                  <h3 className="font-bold text-text-primary">Profile Picture</h3>
+                  <p className="text-xs text-text-secondary max-w-xs">Change your photo to help your peers recognize you. Paste a direct image URL below.</p>
+                </div>
+              </div>
+
+              <form className="space-y-4" onSubmit={handleSave}>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-text-secondary">Avatar URL</label>
+                  <input 
+                    ref={avatarUrlRef}
+                    type="url" 
+                    value={profileData.avatarUrl} 
+                    onChange={(e) => setProfileData({...profileData, avatarUrl: e.target.value})}
+                    placeholder="https://example.com/photo.jpg" 
+                    className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm" 
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-text-secondary">Display Name</label>
+                  <input 
+                    type="text" 
+                    value={profileData.name} 
+                    onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                    className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all" 
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-text-secondary">Bio</label>
+                  <textarea 
+                    value={profileData.bio} 
+                    onChange={(e) => setProfileData({...profileData, bio: e.target.value})}
+                    placeholder="Tell your peers a bit about yourself..."
+                    className="w-full min-h-[100px] p-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm resize-none" 
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-text-secondary">Email Address</label>
-                  <input type="email" defaultValue="hello@example.com" disabled className="w-full h-11 px-3 rounded-lg border border-border bg-bg-secondary text-text-muted cursor-not-allowed" />
+                  <input type="email" value={profileData.email} disabled className="w-full h-11 px-3 rounded-lg border border-border bg-bg-secondary text-text-muted cursor-not-allowed" />
                 </div>
+
                 <div className="pt-4 border-t border-border mt-6 flex justify-end">
-                  <button type="button" className="px-5 py-2.5 bg-primary-500 text-neutral-0 font-medium rounded-xl hover:bg-primary-600 active:scale-95 transition-all shadow-sm">
-                    Save Changes
+                  <button 
+                    type="submit" 
+                    disabled={isSaving || isLoading}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 text-white font-bold rounded-xl hover:bg-primary-600 active:scale-95 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-70"
+                  >
+                    {isSaving && <Loader2 size={18} className="animate-spin" />}
+                    {isSaving ? 'Saving...' : 'Save Profile Changes'}
                   </button>
                 </div>
               </form>

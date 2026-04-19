@@ -19,6 +19,7 @@ export default function MainLayout({
           <Link href="/dashboard" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Dashboard</Link>
           <Link href="/explore" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Explore</Link>
           <Link href="/requests" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Requests</Link>
+          <Link href="/sessions" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Sessions</Link>
           <Link href="/sessions/chat" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Chat</Link>
           
           <div className="h-6 w-px bg-border mx-2 hidden md:block"></div>

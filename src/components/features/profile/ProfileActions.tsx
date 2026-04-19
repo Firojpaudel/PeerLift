@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { Dialog } from "@/components/ui/Dialog/Dialog"
 import Link from "next/link"
+import { toast } from "sonner"
 
 // Simplified types for the props
 type SkillLine = { id: string, skill: { id: string, name: string } }
@@ -53,11 +54,42 @@ export function ProfileActions({
 
   const handleSubmit = () => {
     setIsSubmitting(true)
-    // Simulate API call
-    fetch("/api/requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ receiverId: user.id, offeredSkillId: mode === "LEARN_FROM_THEM" ? (exchangeType === "SKILL" ? selectedMySkill : "CREDITS_" + creditAmount) : selectedMySkill, requestedSkillId: mode === "TEACH_THEM" ? (exchangeType === "SKILL" ? selectedTargetSkill : "CREDITS_" + creditAmount) : selectedTargetSkill, message }) }).then(res => res.json()).then(() => {
+    
+    const payload: any = {
+      receiverId: user.id,
+      message,
+    }
+
+    if (mode === "LEARN_FROM_THEM") {
+      // I am learner, requesting their skill
+      payload.requestedSkillId = selectedTargetSkill
+      if (exchangeType === "SKILL") {
+        payload.offeredSkillId = selectedMySkill
+      } else {
+        payload.offeredCredits = creditAmount
+      }
+    } else {
+      // I am mentor, offering my skill
+      payload.offeredSkillId = selectedMySkill
+      if (exchangeType === "SKILL") {
+        payload.requestedSkillId = selectedTargetSkill
+      } else {
+        payload.requestedCredits = creditAmount
+      }
+    }
+
+    fetch("/api/requests", { 
+      method: "POST", 
+      headers: { "Content-Type": "application/json" }, 
+      body: JSON.stringify(payload) 
+    }).then(res => res.json()).then(() => {
       setIsSubmitting(false)
       setModalOpen(false)
-      alert("Request sent successfully!")
+      toast.success("Request sent successfully!")
+    }).catch(err => {
+      console.error(err)
+      setIsSubmitting(false)
+      toast.error("Failed to send request")
     })
   }
 

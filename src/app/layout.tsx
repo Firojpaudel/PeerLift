@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Bricolage_Grotesque, Instrument_Sans, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import AuthProvider from '@/components/providers/AuthProvider'
+import { HeartbeatProvider } from '@/components/providers/HeartbeatProvider'
+import { Toaster } from 'sonner'
 import './globals.css'
 
 const bricolage = Bricolage_Grotesque({
@@ -37,7 +39,10 @@ export default function RootLayout({
       <body className={`${instrumentSans.variable} ${bricolage.variable} ${jetbrainsMono.variable} min-h-screen bg-bg-primary text-text-primary antialiased font-body transition-colors duration-300`}>
         <AuthProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            {children}
+            <HeartbeatProvider>
+              {children}
+            </HeartbeatProvider>
+            <Toaster position="top-right" expand={false} richColors />
           </ThemeProvider>
         </AuthProvider>
       </body>
