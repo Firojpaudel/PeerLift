@@ -1,27 +1,5 @@
 import { describe, it, expect } from 'vitest';
-
-// We'll simulate the getMessageText logic here for testing since it's a pure function inside the component.
-// Ideally, this function should be exported from a separate utility file.
-// For now, I'll copy the logic into a testable format or export it in the next step.
-
-function getMessageText(m: any): string {
-  let text = '';
-  if (Array.isArray(m.parts)) {
-    text = m.parts
-      .map((p: any) => {
-        if (p.type === 'text') return p.text;
-        if (p.type === 'reasoning' || p.type === 'thought') {
-          const content = p.reasoning || p.thought || p.text || '';
-          return content.includes('<think>') ? content : `<think>${content}</think>`;
-        }
-        return '';
-      })
-      .join('');
-  } else if (typeof m.content === 'string') {
-    text = m.content;
-  }
-  return text;
-}
+import { getMessageText } from '@/lib/chat-utils';
 
 describe('getMessageText', () => {
   it('should extract plain text from content string', () => {
