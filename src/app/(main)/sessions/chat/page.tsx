@@ -242,7 +242,7 @@ function ChatSessionInner() {
     setMessages 
   } = useChat({
     experimental_chatTransport: chatTransport as any,
-  } as any);
+  }) as any;
 
   // Auto-unlock UI if we already have a conversation
   useEffect(() => {
