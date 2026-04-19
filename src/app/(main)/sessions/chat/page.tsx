@@ -239,10 +239,44 @@ function ChatSessionInner() {
     handleSubmit: sendAI, 
     append, 
     isLoading: isAILoading, 
-    setMessages 
+    setMessages,
+    reload
   } = useChat({
     experimental_chatTransport: chatTransport as any,
   }) as any;
+
+  // Voice Interaction Handlers
+  const startVoiceMode = () => {
+    setShowVoiceMode(true);
+  };
+
+  const stopVoiceMode = () => {
+    setShowVoiceMode(false);
+    window.speechSynthesis.cancel();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {
+        console.error("Failed to stop recognition:", e);
+      }
+      recognitionRef.current = null;
+    }
+    voiceModeRef.current = false;
+  };
+
+  // Helper for direct AI message sending
+  const sendAIMessage = async (options: { text: string }) => {
+    if (!append || typeof append !== 'function') {
+      console.error("AI SDK 'append' is not available. Check your hook initialization.");
+      // Fallback: update messages manually if possible or reload
+      return;
+    }
+    try {
+      await append({ role: 'user', content: options.text });
+    } catch (err) {
+      console.error("Failed to send AI message:", err);
+    }
+  };
 
   // Auto-unlock UI if we already have a conversation
   useEffect(() => {
@@ -530,7 +564,7 @@ function ChatSessionInner() {
           if ((accumulatedTranscript + currentInterim).trim()) {
             setIsListening(false);
             window.speechSynthesis.cancel();
-            append({ role: 'user', content: (accumulatedTranscript + currentInterim).trim() });
+            sendAIMessage({ text: (accumulatedTranscript + currentInterim).trim() });
             accumulatedTranscript = '';
             try { recognition.stop(); } catch (e) { }
           }
@@ -546,7 +580,7 @@ function ChatSessionInner() {
         recognitionRef.current = null;
       }
     };
-  }, [showVoiceMode, isAILoading, append]);
+  }, [showVoiceMode, isAILoading, sendAIMessage]);
 
   // Voice TTS effect
   const lastSpokenMsgId = useRef<string>('');
@@ -870,7 +904,7 @@ function ChatSessionInner() {
                   <div className="flex items-center">
                     <button
                       type="button"
-                      onClick={() => setShowVoiceMode(true)}
+                      onClick={startVoiceMode}
                       className="p-2.5 text-text-muted hover:text-primary-500 hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none"
                       title="Voice Message (ASR)"
                     >
