@@ -213,6 +213,7 @@ function ChatSessionInner() {
   const peerId = searchParams.get('peerId') || '';
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasFetchedHistory = useRef<string | null>(null);
 
   // Local Session State
   const [sessionUserId, setSessionUserId] = useState<string>('');
@@ -299,25 +300,10 @@ function ChatSessionInner() {
 
   // Helper for direct AI message sending
   const sendAIMessage = async (options: { text: string }) => {
-    // Robust check for append function
-    const appendFn = append;
-    if (typeof appendFn !== 'function') {
-      console.warn("AI SDK 'append' is not available as a function. Trying fallback sendAI...");
-      
-      // Fallback 1: Try handleSubmit if it exists as sendAI
-      if (typeof sendAI === 'function') {
-        try {
-           // We can't easily pass the text to handleSubmit as it expects a form event, 
-           // but we can try to set the input and call it if possible. 
-           // However, append is much more reliable for programmatic calls.
-           console.log("Fallback to handleSubmit is complex, just returning.");
-        } catch (e) {}
-      }
-      return;
-    }
-
+    if (!options.text.trim() || isAILoading) return;
+    
     try {
-      await appendFn({ role: 'user', content: options.text });
+      await append({ role: 'user', content: options.text });
     } catch (err) {
       console.error("Failed to send AI message:", err);
     }
@@ -460,15 +446,23 @@ function ChatSessionInner() {
     if (!sessionUserId) return;
     if (!isAI && !peerId) return;
 
+    const currentSessionKey = isAI ? 'ai' : peerId;
+    if (hasFetchedHistory.current === currentSessionKey) return;
+
     const query = isAI ? 'isAi=true' : `peerId=${peerId}`;
     fetch(`/api/chat/messages?${query}`)
       .then(res => res.json())
       .then(data => {
         if (!data.error && Array.isArray(data)) {
           if (isAI) {
-            setMessages(data);
+            // Only set AI messages if we are not actively loading a response
+            if (!isAILoading) {
+              setMessages(data);
+              hasFetchedHistory.current = currentSessionKey;
+            }
           } else {
             setDmMessages(data.map((m: any) => ({ ...m, status: 'READ' })));
+            hasFetchedHistory.current = currentSessionKey;
           }
         }
       });
@@ -483,7 +477,7 @@ function ChatSessionInner() {
           }
         });
     }
-  }, [peerId, isAI, sessionUserId, setMessages]);
+  }, [peerId, isAI, sessionUserId, setMessages, isAILoading]);
 
 
   // Voices Proactive
