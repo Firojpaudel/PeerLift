@@ -107,7 +107,7 @@ ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextD
           parameters: z.object({
             query: z.string().describe("The exact search query to execute on the open web"),
           }),
-          execute: async ({ query }) => {
+          execute: async ({ query }: any) => {
             try {
               const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
               const html = await res.text();
