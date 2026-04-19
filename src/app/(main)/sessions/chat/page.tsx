@@ -124,7 +124,9 @@ const ThoughtBlock = ({ content }: { content: string }) => {
       </button>
       {isExpanded && (
         <div className="p-4 pt-0 text-[13px] leading-relaxed text-text-secondary/80 font-medium italic animate-in fade-in slide-in-from-top-2 duration-300">
-          <ReactMarkdown className="prose prose-sm prose-p:my-1 opacity-70 border-l-2 border-amber-500/20 pl-4 ml-1">{content}</ReactMarkdown>
+          <div className="prose prose-sm prose-p:my-1 opacity-70 border-l-2 border-amber-500/20 pl-4 ml-1">
+            <ReactMarkdown>{content}</ReactMarkdown>
+          </div>
         </div>
       )}
     </div>

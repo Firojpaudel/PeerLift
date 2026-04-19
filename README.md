@@ -106,6 +106,24 @@ The application will be accessible at `http://localhost:3000`.
 
 ---
 
+## Deployment & Architecture Guide
+
+PeerLift uses a modern, distributed architecture to ensure scalability and high performance.
+
+### 1. Database (Neon Serverless Postgres)
+Neon handles connection pooling automatically, preventing Vercel functions from exhausting database connections.
+1.  Create a project at [neon.tech](https://neon.tech).
+2.  Add your **Pooled Connection String** to `.env.local`: `DATABASE_URL="postgresql://user:password@ep-pooler...neon.tech/peerlift?sslmode=require"`.
+3.  Sync your schema: `npx prisma db push`.
+
+### 2. Frontend & AI (Vercel)
+Vercel hosts the Next.js app and the AI streaming routes.
+1.  Import your repository into Vercel.
+2.  Configure environment variables: `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GROQ_API_KEY`, `PUSHER_*`.
+3.  Deploy. Vercel handles the build and deployment automatically.
+
+---
+
 ## Security and Compliance
 
 PeerLift implements strict security protocols:
