@@ -43,3 +43,6 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+// Mock Element.prototype.scrollIntoView
+Element.prototype.scrollIntoView = vi.fn();
