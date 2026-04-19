@@ -802,7 +802,7 @@ function ChatSessionInner() {
                     className={`p-2 rounded-full transition-all ${showConfig ? 'bg-primary-500 text-white' : 'text-text-muted hover:text-primary-500 hover:bg-primary-500/10'}`}
                     title="Tutor Settings"
                   >
-                    <Settings size={18} />
+                    <Settings2 size={18} />
                   </button>
                 </div>
               )}
