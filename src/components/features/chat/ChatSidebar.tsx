@@ -12,6 +12,7 @@ interface Contact {
   lastActivity: string;
   lastSeen: string | null;
   status: string;
+  avatarUrl?: string;
 }
 
 interface ChatSidebarProps {
