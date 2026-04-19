@@ -265,7 +265,7 @@ function ChatSessionInner() {
     isLoading: isAILoading, 
     setMessages,
     reload
-  } = useChat({
+  } = (useChat as any)({
     api: '/api/chat',
     body: {
       contextData: { 
@@ -276,7 +276,7 @@ function ChatSessionInner() {
         documentText: parsedDoc?.text 
       },
     },
-  } as any) as any;
+  });
 
   // Voice Interaction Handlers
   const startVoiceMode = () => {
@@ -789,15 +789,27 @@ function ChatSessionInner() {
                 </button>
               )}
               {isAI && (
-                <button
-                  onClick={() => setShowVoiceMode(true)}
-                  className={`p-2.5 rounded-full transition-all shadow-sm ${showVoiceMode ? 'bg-primary-500 text-white shadow-primary-500/20 animate-pulse' : 'bg-primary-500 hover:bg-primary-600 text-white shadow-primary-500/20 hover:scale-105 active:scale-95'}`}
-                  title="Enter Voice Mode"
-                >
-                  <Phone size={20} />
-                </button>
+                <div className="flex items-center gap-1.5 bg-bg-secondary p-1 rounded-full border border-border/50">
+                  <button
+                    onClick={() => setShowVoiceMode(true)}
+                    className={`p-2 rounded-full transition-all ${showVoiceMode ? 'bg-primary-500 text-white shadow-primary-500/20 animate-pulse' : 'hover:bg-primary-500/10 text-primary-500 transition-all hover:scale-105 active:scale-95'}`}
+                    title="Enter Voice Mode"
+                  >
+                    <Phone size={18} />
+                  </button>
+                  <button
+                    onClick={() => setShowConfig(!showConfig)}
+                    className={`p-2 rounded-full transition-all ${showConfig ? 'bg-primary-500 text-white' : 'text-text-muted hover:text-primary-500 hover:bg-primary-500/10'}`}
+                    title="Tutor Settings"
+                  >
+                    <Settings size={18} />
+                  </button>
+                </div>
               )}
-              <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2.5 text-text-muted hover:bg-bg-secondary rounded-full hover:text-text-primary hidden md:block transition-all active:scale-95">
+              <button 
+                onClick={() => setIsFullscreen(!isFullscreen)} 
+                className={`p-2.5 rounded-full transition-all active:scale-95 ${isFullscreen ? 'bg-primary-500 text-white' : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'}`}
+              >
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
               </button>
             </div>
