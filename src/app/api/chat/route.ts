@@ -76,12 +76,17 @@ ONLY when explaining complex topics, workflows, or architectures that genuinely 
 
 ${contextData?.isReasoning ? "### REASONING INSTRUCTIONS: YOU MUST THINK STEP-BY-STEP. ALWAYS enclose your internal monologue and step-by-step thinking inside <think> and </think> tags at the very start of your response." : ""}
 
-### CRITICAL MERMAID RULES:
-1. USE STRICT SYNTAX: Always use \`graph LR\` or \`graph TD\`.
-2. NO HALLUCINATED ARROWS: Only use \`-->\` for standard arrows. Never use \`->\` or any arrows with unicode characters.
-3. LABEL SYNTAX: Always use \`NodeA -->|Label text| NodeB\`. Never include extra characters like \`|Label|> \` or \`--> |Label| \`. 
-4. QUOTING: Always wrap your node text in double quotes to prevent syntax crashes, e.g., \`A["Input List"]\`.
-5. MINIMALISM: Keep diagrams focused; do not over-style.
+### CRITICAL MERMAID RULES (BRANCHING & COMPLEXITY):
+1. USE STRICT SYNTAX: Always use \`graph LR\` (Left-to-Right) or \`graph TD\` (Top-Down).
+2. BRANCHING & DECISIONS: Use branched logic flows. For decision points, use diamond nodes, e.g., \`NodeA{Decision?} -->|Yes| NodeB\`.
+3. SUBGRAPHS: Group related concepts into subgraphs to organize complex "branches", e.g.:
+   \`subgraph GroupName
+      NodeC --> NodeD
+   end\`
+4. NO HALLUCINATED ARROWS: Only use \`-->\` for standard arrows or \`==>\` for bold ones. Never use \`->\` or any arrows with unicode characters.
+5. LABEL SYNTAX: Always use \`NodeA -->|Label text| NodeB\`. 
+6. QUOTING: Always wrap your node text in double quotes to prevent syntax crashes, e.g., \`A["Input List"]\`.
+7. VISUAL STYLE: For better branching, use different node shapes: \`[ ]\` for rectangles, \`( )\` for rounded, \`(( ))\` for circles, \`{ }\` for diamonds.
 
 Make your responses highly structured using Markdown headers, lists, code blocks, and bold text for emphasis.
 Keep your tone warm, empowering, and human. Emphasize learning step-by-step.

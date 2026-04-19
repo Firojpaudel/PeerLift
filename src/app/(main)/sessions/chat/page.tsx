@@ -24,6 +24,7 @@ const MermaidChart = ({ chart }: { chart: string }) => {
   const [svg, setSvg] = useState('');
   const [isError, setIsError] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const sanitizeMermaid = (code: string) => {
     return code
@@ -33,7 +34,8 @@ const MermaidChart = ({ chart }: { chart: string }) => {
       .replace(/(-{2,})\s*\|([^|]+)\|/g, '-->|$2|')
       .replace(/->\s*\|([^|]+)\|/g, '-->|$1|')
       .replace(/(\[[^\]]+\])\s*(-{2,})\s*\|([^|]+)\|/g, '$1-->|$3|')
-      .replace(/graph\s+(TD|LR|BT|RL)\s+/g, 'graph $1\n');
+      .replace(/graph\s+(TD|LR|BT|RL)\s+/g, 'graph $1\n')
+      .replace(/subgraph\s+([^\n{]+)\s*\n/g, 'subgraph "$1"\n'); // Ensure subgraphs have quoted names
   };
 
   useEffect(() => {
@@ -42,9 +44,30 @@ const MermaidChart = ({ chart }: { chart: string }) => {
         const { default: mermaid } = await import('mermaid');
         mermaid.initialize({
           startOnLoad: false,
-          theme: 'dark',
+          theme: 'base',
+          themeVariables: {
+            primaryColor: '#F59E0B',
+            primaryTextColor: '#fff',
+            primaryBorderColor: '#F59E0B',
+            lineColor: '#FB1',
+            secondaryColor: '#0061ff',
+            tertiaryColor: '#fff',
+            mainBkg: '#121212',
+            nodeBorder: '#333',
+            clusterBkg: '#1a1a1a',
+            clusterBorder: '#444',
+            defaultLinkColor: '#888',
+            fontFamily: 'Inter, system-ui, sans-serif',
+          },
           securityLevel: 'loose',
-          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+          flowchart: { 
+            useMaxWidth: false, // For zoom/pan
+            htmlLabels: true, 
+            curve: 'basis',
+            rankSpacing: 50,
+            nodeSpacing: 50,
+            padding: 15
+          }
         });
 
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
@@ -66,34 +89,42 @@ const MermaidChart = ({ chart }: { chart: string }) => {
         <div className="flex items-center justify-between gap-2 mb-2">
           <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Chart Error</span>
           <button onClick={() => setShowRaw(!showRaw)} className="text-[10px] bg-red-500/20 px-2 py-0.5 rounded text-red-400 hover:bg-red-500/30">
-            {showRaw ? 'Back to Error' : 'View Raw Code'}
+            {showRaw ? 'Back to Error' : 'View Code'}
           </button>
         </div>
         {showRaw ? (
           <pre className="text-[10px] text-red-400/80 overflow-auto max-h-40 p-2 bg-black/20 rounded-lg">{chart}</pre>
         ) : (
-          <p className="text-xs text-red-400">Failed to render this diagram. The AI might have used invalid syntax.</p>
+          <p className="text-xs text-red-400">Diagram synthesis failed. The AI might have used complex branching or invalid syntax.</p>
         )}
       </div>
     );
   }
 
   return (
-    <div className="my-4 overflow-hidden rounded-xl border border-white/5 shadow-2xl relative group">
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-2">
-        <button onClick={() => setShowRaw(!showRaw)} className="p-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white/70 hover:text-white transition-colors" title="View Source">
-          <PlayCircle size={14} />
+    <div className="my-6 overflow-hidden rounded-2xl border border-white/5 shadow-2xl relative group bg-[#0B0B0B]">
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-2">
+        <button onClick={() => setShowRaw(!showRaw)} className="p-2 bg-black/60 backdrop-blur-md rounded-xl text-white/70 hover:text-white transition-all hover:scale-105 active:scale-95" title="View Source">
+          {showRaw ? <Brain size={16} /> : <PlayCircle size={16} />}
         </button>
       </div>
+      
       {showRaw ? (
-        <div className="p-4 bg-[#1e1e1e] font-mono text-[11px] text-primary-300">
-          {chart}
+        <div className="p-5 bg-[#121212] font-mono text-[11px] text-amber-500/80 leading-relaxed overflow-auto max-h-[400px]">
+          <pre>{chart}</pre>
         </div>
       ) : (
-        <div
-          className="p-6 bg-[#0B0B0B] flex justify-center items-center cursor-zoom-in overflow-auto min-h-[200px]"
-          dangerouslySetInnerHTML={{ __html: svg }}
-        />
+        <div className="relative min-h-[300px]">
+           <div
+            ref={containerRef}
+            className="p-8 flex justify-center items-center overflow-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent active:cursor-grabbing transition-all"
+            dangerouslySetInnerHTML={{ __html: svg }}
+            style={{ minHeight: '300px' }}
+          />
+          <div className="absolute bottom-3 left-3 text-[10px] text-white/20 font-medium pointer-events-none">
+            SCROLL TO ZOOM / PAN • BRANCHED LOGIC
+          </div>
+        </div>
       )}
     </div>
   );
@@ -224,14 +255,7 @@ function ChatSessionInner() {
   const voiceModeRef = useRef(false);
   const recognitionRef = useRef<any>(null);
 
-  // --- AI Hook (v6 SDK) ---
-  const chatTransport = React.useMemo(() => new (TextStreamChatTransport as any)({
-    api: '/api/chat',
-    body: {
-      contextData: { learningGoal, learningDetail, tutorName, isReasoning: isReasoningMode, documentText: parsedDoc?.text },
-    }
-  }), [learningGoal, learningDetail, tutorName, isReasoningMode, parsedDoc]);
-
+  // --- AI Hook (Stable Standard) ---
   const { 
     messages: aiMessages, 
     input: aiInput, 
@@ -242,8 +266,17 @@ function ChatSessionInner() {
     setMessages,
     reload
   } = useChat({
-    experimental_chatTransport: chatTransport as any,
-  } as any) as any;
+    api: '/api/chat',
+    body: {
+      contextData: { 
+        learningGoal, 
+        learningDetail, 
+        tutorName, 
+        isReasoning: isReasoningMode, 
+        documentText: parsedDoc?.text 
+      },
+    },
+  });
 
   // Voice Interaction Handlers
   const startVoiceMode = () => {
