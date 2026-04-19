@@ -243,7 +243,7 @@ function ChatSessionInner() {
     reload
   } = useChat({
     experimental_chatTransport: chatTransport as any,
-  }) as any;
+  } as any) as any;
 
   // Voice Interaction Handlers
   const startVoiceMode = () => {
