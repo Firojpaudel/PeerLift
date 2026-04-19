@@ -276,7 +276,7 @@ function ChatSessionInner() {
         documentText: parsedDoc?.text 
       },
     },
-  });
+  }) as any;
 
   // Voice Interaction Handlers
   const startVoiceMode = () => {
