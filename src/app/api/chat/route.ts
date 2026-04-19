@@ -121,7 +121,7 @@ ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextD
               return "Search timeout or block.";
             }
           },
-        }),
+        } as any),
       },
       onFinish: async ({ text }) => {
         try {
