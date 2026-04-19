@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("from") || "/dashboard";
@@ -21,7 +21,6 @@ export default function LoginPage() {
     setIsLoading(true);
     setErrorMsg("");
     
-    // Attempt login using next-auth credentials provider
     const result = await signIn("credentials", {
       email,
       password,
@@ -97,7 +96,7 @@ export default function LoginPage() {
       </div>
 
       <Button variant="secondary" className="w-full relative py-6">
-        <span className="absolute left-6">G</span> {/* Placeholder for Google */}
+        <span className="absolute left-6">G</span>
         Sign in with Google
       </Button>
 
@@ -105,5 +104,17 @@ export default function LoginPage() {
         Don&apos;t have an account? <a href="/register" className="font-semibold text-primary-600 hover:text-primary-700">Sign up here</a>
       </p>
     </div>
-  )
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
 }
