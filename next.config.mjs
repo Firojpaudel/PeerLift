@@ -3,9 +3,9 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Skip bundling heavy Node.js libraries to speed up compilation
-  serverExternalPackages: ['pdf-parse', 'mammoth', 'bcrypt'],
   experimental: {
+    // Skip bundling heavy Node.js libraries to speed up compilation
+    serverComponentsExternalPackages: ['pdf-parse', 'mammoth', 'bcrypt'],
     // Optimizes loading of large UI libraries
     optimizePackageImports: ['lucide-react', 'framer-motion'],
   },

@@ -44,6 +44,8 @@ model User {
   skillsWanted      UserSkill[]              @relation("SkillsWanted")
   friendsSent       Friendship[]             @relation("FriendshipSender")
   friendsReceived   Friendship[]             @relation("FriendshipReceiver")
+  aiChatSessions    AIChatSession[]
+
 
   @@index([username])
   @@index([email])
@@ -245,11 +247,30 @@ model Message {
   sessionId    String?
   status       MessageStatus @default(SENT)
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSession  AIChatSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([receiverId])
   @@index([sessionId])
   @@map("messages")
+}
+
+model AIChatSession {
+  id           String    @id @default(uuid())
+  title        String
+  learningGoal String?
+  skillLevel   String?
+  tutorName    String?
+  tutorGender  String?   @default("female")
+  isReasoning  Boolean   @default(false)
+  userId       String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@index([userId])
+  @@map("ai_chat_sessions")
 }
 
 model Friendship {

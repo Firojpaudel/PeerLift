@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useChat } from '@ai-sdk/react';
 // @ts-ignore - Transport types in AI SDK 6 might vary locally
 import { TextStreamChatTransport } from 'ai';
-import { ChevronLeft, Send, Phone, Search, Users, Bot, Mic, Settings2, PlayCircle, X, Maximize, Minimize, Plus, Paperclip, Brain, Volume2, Square, Video, Calendar } from 'lucide-react';
+import { ChevronLeft, Send, Phone, Search, Users, Bot, Mic, Settings2, PlayCircle, X, Maximize, Minimize, Plus, Paperclip, Brain, Volume2, Square, Video, Calendar, Zap, Lightbulb } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -18,6 +18,7 @@ import { getMessageText } from '@/lib/chat-utils';
 import { ChatSidebar } from '@/components/features/chat/ChatSidebar';
 import { MessageList } from '@/components/features/chat/MessageList';
 import { ScheduleMeetModal } from '@/components/features/chat/ScheduleMeetModal';
+import { ChatTour } from '@/components/features/tutorial/ChatTour';
 
 // --- Mermaid Chart Component ---
 const MermaidChart = ({ chart }: { chart: string }) => {
@@ -25,9 +26,10 @@ const MermaidChart = ({ chart }: { chart: string }) => {
   const [isError, setIsError] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const sanitizeMermaid = (code: string) => {
-    return code
+    return (code || '')
       .trim()
       .replace(/[→⎯→⇒⇨\u2192\u2190\u2194\u21D0\u21D2]/g, '-->')
       .replace(/(-{1,})*>*\s*\|([^|]+)\|>+/g, '-->|$2|')
@@ -63,7 +65,7 @@ const MermaidChart = ({ chart }: { chart: string }) => {
           flowchart: {
             useMaxWidth: false, // For zoom/pan
             htmlLabels: true,
-            curve: 'basis',
+            curve: 'cardinal',
             rankSpacing: 50,
             nodeSpacing: 50,
             padding: 15
@@ -73,30 +75,60 @@ const MermaidChart = ({ chart }: { chart: string }) => {
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
         const sanitized = sanitizeMermaid(chart);
         const { svg: svgCode } = await mermaid.render(id, sanitized);
+        
+        // Clear any pending error timeouts if rendering succeeds
+        if (errorTimeoutRef.current) {
+          clearTimeout(errorTimeoutRef.current);
+          errorTimeoutRef.current = null;
+        }
+
         setSvg(svgCode);
         setIsError(false);
       } catch (err) {
-        console.error('Mermaid render error:', err);
-        setIsError(true);
+        // If compilation fails while text is actively streaming, do NOT show the error card instantly.
+        // Instead, debounce the error state by 1.5 seconds. If a new chunk comes in, this timer is reset.
+        if (errorTimeoutRef.current) {
+          clearTimeout(errorTimeoutRef.current);
+        }
+        
+        errorTimeoutRef.current = setTimeout(() => {
+          setIsError(true);
+        }, 1500);
       }
     };
     renderChart();
+
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+    };
   }, [chart]);
 
   if (isError) {
     return (
-      <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Chart Error</span>
-          <button onClick={() => setShowRaw(!showRaw)} className="text-[10px] bg-red-500/20 px-2 py-0.5 rounded text-red-400 hover:bg-red-500/30">
-            {showRaw ? 'Back to Error' : 'View Code'}
+      <div className="my-6 overflow-hidden rounded-2xl border border-red-500/20 shadow-2xl relative bg-[#0B0B0B] min-h-[300px] flex flex-col justify-center transition-all duration-300">
+        <div className="p-6 bg-red-500/5 max-w-md mx-auto rounded-xl border border-red-500/10 text-center animate-in fade-in-50 duration-300">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Synthesis Error</span>
+          </div>
+          <p className="text-xs text-red-400/90 leading-relaxed mb-4">
+            Diagram synthesis failed. The AI might have used complex branching or invalid syntax.
+          </p>
+          <button 
+            onClick={() => setShowRaw(!showRaw)} 
+            className="text-[11px] font-bold bg-red-500/20 hover:bg-red-500/30 px-3.5 py-1.5 rounded-lg text-red-300 hover:text-red-200 transition-all outline-none"
+          >
+            {showRaw ? 'Show Explanation' : 'Inspect Raw Code'}
           </button>
+          
+          {showRaw && (
+            <pre className="text-[10px] text-red-400/80 overflow-auto max-h-40 p-3 bg-black/40 rounded-lg text-left mt-4 font-mono leading-relaxed border border-red-500/10 transition-all">
+              {chart}
+            </pre>
+          )}
         </div>
-        {showRaw ? (
-          <pre className="text-[10px] text-red-400/80 overflow-auto max-h-40 p-2 bg-black/20 rounded-lg">{chart}</pre>
-        ) : (
-          <p className="text-xs text-red-400">Diagram synthesis failed. The AI might have used complex branching or invalid syntax.</p>
-        )}
       </div>
     );
   }
@@ -115,12 +147,19 @@ const MermaidChart = ({ chart }: { chart: string }) => {
         </div>
       ) : (
         <div className="relative min-h-[300px]">
-          <div
-            ref={containerRef}
-            className="p-8 flex justify-center items-center overflow-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent active:cursor-grabbing transition-all"
-            dangerouslySetInnerHTML={{ __html: svg }}
-            style={{ minHeight: '300px' }}
-          />
+          {!svg ? (
+            <div className="absolute inset-0 flex flex-col justify-center items-center gap-3 bg-black/10 backdrop-blur-[1px] min-h-[300px]">
+              <span className="w-8 h-8 rounded-full border-2 border-primary-500/30 border-t-primary-500 animate-spin block"></span>
+              <span className="text-[11px] font-bold text-primary-500/70 uppercase tracking-widest animate-pulse">Generating learning graph...</span>
+            </div>
+          ) : (
+            <div
+              ref={containerRef}
+              className="p-8 flex justify-center items-center overflow-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent active:cursor-grabbing transition-all animate-in fade-in duration-300"
+              dangerouslySetInnerHTML={{ __html: svg }}
+              style={{ minHeight: '300px' }}
+            />
+          )}
           <div className="absolute bottom-3 left-3 text-[10px] text-white/20 font-medium pointer-events-none">
             SCROLL TO ZOOM / PAN • BRANCHED LOGIC
           </div>
@@ -164,6 +203,78 @@ const ThoughtBlock = ({ content }: { content: string }) => {
   );
 };
 
+// --- Speech Waveform Visualizer ---
+const WaveformVisualizer = ({ state }: { state: 'listening' | 'thinking' | 'speaking' | 'idle' }) => {
+  const barCount = 19;
+  const getAnimationClass = () => {
+    switch (state) {
+      case 'speaking': return 'animate-wave-speaking';
+      case 'listening': return 'animate-wave-listening';
+      case 'thinking': return 'animate-wave-thinking';
+      default: return 'animate-wave-idle';
+    }
+  };
+
+  const getBarColor = () => {
+    switch (state) {
+      case 'speaking': return 'bg-gradient-to-t from-amber-500 to-primary-500';
+      case 'listening': return 'bg-gradient-to-t from-emerald-500 to-teal-400';
+      case 'thinking': return 'bg-gradient-to-t from-blue-500 to-indigo-500';
+      default: return 'bg-white/10';
+    }
+  };
+
+  return (
+    <div className="flex items-end justify-center gap-1 h-20 px-8 py-3 my-6 rounded-2xl bg-black/35 backdrop-blur-md border border-white/5 shadow-inner min-w-[280px]">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes wave-speaking {
+          0%, 100% { transform: scaleY(0.2); }
+          50% { transform: scaleY(1.9); }
+        }
+        @keyframes wave-listening {
+          0%, 100% { transform: scaleY(0.3); }
+          50% { transform: scaleY(0.8); }
+        }
+        @keyframes wave-thinking {
+          0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+          50% { transform: scaleY(1.3); opacity: 1; }
+        }
+        @keyframes wave-idle {
+          0%, 100% { transform: scaleY(0.15); }
+          50% { transform: scaleY(0.35); }
+        }
+        .animate-wave-speaking {
+          animation: wave-speaking 0.75s ease-in-out infinite;
+        }
+        .animate-wave-listening {
+          animation: wave-listening 1.3s ease-in-out infinite;
+        }
+        .animate-wave-thinking {
+          animation: wave-thinking 1.6s ease-in-out infinite;
+        }
+        .animate-wave-idle {
+          animation: wave-idle 2.2s ease-in-out infinite;
+        }
+      `}} />
+      {Array.from({ length: barCount }).map((_, i) => {
+        const delay = (Math.abs(i - 9) * 0.08).toFixed(2);
+        const baseHeight = 10 + Math.sin(i * 0.4) * 5;
+        return (
+          <div
+            key={i}
+            className={`w-[6px] rounded-full origin-bottom transition-all duration-500 ${getAnimationClass()} ${getBarColor()}`}
+            style={{
+              height: `${baseHeight}px`,
+              animationDelay: `${delay}s`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
+
 // Custom Markdown Renderer Components
 const markdownComponents = {
   // Override the default <pre> wrapper so Tailwind's typography plugin doesn't add its own box-in-a-box styling
@@ -181,19 +292,21 @@ const markdownComponents = {
 
     if (match && !props.inline) {
       return (
-        <div className="my-5 rounded-xl overflow-hidden shadow-2xl relative group bg-[#1e1e1e] border border-white/10">
+        <div className="my-5 rounded-xl overflow-hidden shadow-2xl relative group bg-[#1e1e1e] border border-white/10 transition-all duration-300 ease-out animate-in fade-in-50">
           <div className="bg-[#2d2d2d] border-b border-white/5 px-4 py-2 text-xs text-neutral-400 flex items-center justify-between uppercase tracking-wider" style={{ fontFamily: '"Iosevka", "Iosevka Term", monospace' }}>
             {lang}
           </div>
-          <SyntaxHighlighter
-            style={vscDarkPlus as any}
-            language={lang}
-            PreTag="div"
-            customStyle={{ margin: 0, padding: '1.25rem', backgroundColor: '#1e1e1e', fontSize: '14px', fontFamily: '"Iosevka", "Iosevka Term", monospace', lineHeight: '1.6' }}
-            {...props}
-          >
-            {String(children).replace(/\n$/, '')}
-          </SyntaxHighlighter>
+          <div className="relative min-h-[4rem] transition-all duration-300">
+            <SyntaxHighlighter
+              style={vscDarkPlus as any}
+              language={lang}
+              PreTag="div"
+              customStyle={{ margin: 0, padding: '1.25rem', backgroundColor: '#1e1e1e', fontSize: '14px', fontFamily: '"Iosevka", "Iosevka Term", monospace', lineHeight: '1.6' }}
+              {...props}
+            >
+              {String(children).replace(/\n$/, '')}
+            </SyntaxHighlighter>
+          </div>
         </div>
       );
     }
@@ -209,11 +322,39 @@ const markdownComponents = {
 
 function ChatSessionInner() {
   const searchParams = useSearchParams();
-  const isAI = searchParams.get('ai') === 'true';
+  const router = useRouter();
   const peerId = searchParams.get('peerId') || '';
+  const isAI = searchParams.get('ai') !== 'false' && (searchParams.get('ai') === 'true' || !peerId);
+  const urlSessionId = searchParams.get('sessionId') || '';
+  const isNewSession = searchParams.get('new') === 'true';
+  const [activeSessionId, setActiveSessionId] = useState(urlSessionId);
+  const initialPeerName = searchParams.get('peerName') || '';
+
+  // Synchronize local activeSessionId state instantly on URL query updates
+  useEffect(() => {
+    if (isNewSession) {
+      setActiveSessionId('');
+      setIsConfigured(false);
+      setLearningGoal('');
+      setTutorName('Lumina');
+      setTutorGender('female');
+      setLearningDetail('Intermediate');
+      setIsReasoningMode(false);
+      // Clear previous session's messages so config card shows cleanly
+      setMessages([]);
+    } else {
+      setActiveSessionId(urlSessionId);
+      if (urlSessionId) {
+        setIsConfigured(true);
+      }
+    }
+  }, [urlSessionId, isNewSession]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasFetchedHistory = useRef<string | null>(null);
+  const lastSpokenMsgId = useRef<string>('');
+  const isAILoadingRef = useRef(false);
+  const isSpeakingVoiceRef = useRef(false);
 
   // Local Session State
   const [sessionUserId, setSessionUserId] = useState<string>('');
@@ -223,25 +364,30 @@ function ChatSessionInner() {
   const [dmMessages, setDmMessages] = useState<any[]>([]);
   const [dmInput, setDmInput] = useState('');
   const [isLoadingDM, setIsLoadingDM] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<any>(initialPeerName ? { name: initialPeerName, id: peerId } : null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isPeerTyping, setIsPeerTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // UI States
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showConfig, setShowConfig] = useState(isAI);
+  const [showConfig, setShowConfig] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
   // Voice UI States
   const [isListening, setIsListening] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
+  const [isSpeakingVoice, setIsSpeakingVoice] = useState(false);
 
-  // AI Config
+  // AI Config & Sessions
+  const [aiSessions, setAiSessions] = useState<any[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [learningGoal, setLearningGoal] = useState('');
   const [learningDetail, setLearningDetail] = useState('Intermediate');
   const [tutorName, setTutorName] = useState('Lumina');
-  const [isConfigured, setIsConfigured] = useState(!isAI);
+  const [tutorGender, setTutorGender] = useState<'male' | 'female'>('female');
+  const [isConfigured, setIsConfigured] = useState(true);
   const [isReasoningMode, setIsReasoningMode] = useState(false);
 
   // Speech & Voice
@@ -255,17 +401,19 @@ function ChatSessionInner() {
 
   const voiceModeRef = useRef(false);
   const recognitionRef = useRef<any>(null);
+  const sendAIMessageRef = useRef<(options: { text: string }) => void>(() => {});
 
-  // --- AI Hook (Stable Standard) ---
+  // --- AI Hook (Decoupled New Vercel AI SDK Integration) ---
+  const [aiInput, setAiInput] = useState('');
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAiInput(e.target.value);
+  };
+
   const {
     messages: aiMessages,
-    input: aiInput,
-    handleInputChange,
-    handleSubmit: sendAI,
-    append,
-    isLoading: isAILoading,
+    sendMessage,
     setMessages,
-    reload
+    status: aiStatus,
   } = (useChat as any)({
     api: '/api/chat',
     body: {
@@ -274,19 +422,49 @@ function ChatSessionInner() {
         learningDetail,
         tutorName,
         isReasoning: isReasoningMode,
-        documentText: parsedDoc?.text
+        documentText: parsedDoc?.text,
+        sessionId: activeSessionId,
       },
     },
   });
 
+  const isAILoading = aiStatus === 'submitted' || aiStatus === 'streaming';
+
+  useEffect(() => {
+    isAILoadingRef.current = isAILoading;
+  }, [isAILoading]);
+
+  useEffect(() => {
+    isSpeakingVoiceRef.current = isSpeakingVoice;
+  }, [isSpeakingVoice]);
+
   // Voice Interaction Handlers
-  const startVoiceMode = () => {
+  const startVoiceMode = async () => {
+    // Explicitly request native browser microphone permission to prompt user authorization
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Immediately release the track so the SpeechRecognition API can utilize the microphone
+        stream.getTracks().forEach(track => track.stop());
+      }
+    } catch (err) {
+      console.warn("Microphone access permission was denied or blocked:", err);
+    }
+
+    // Treat all existing assistant messages as already spoken to avoid reading old history
+    if (aiMessages.length > 0) {
+      const lastMessage = aiMessages[aiMessages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        lastSpokenMsgId.current = lastMessage.id;
+      }
+    }
     setShowVoiceMode(true);
   };
 
   const stopVoiceMode = () => {
     setShowVoiceMode(false);
     window.speechSynthesis.cancel();
+    setIsSpeakingVoice(false);
     if (recognitionRef.current) {
       try {
         recognitionRef.current.abort();
@@ -298,15 +476,158 @@ function ChatSessionInner() {
     voiceModeRef.current = false;
   };
 
-  // Helper for direct AI message sending
+  const handleInterrupt = () => {
+    window.speechSynthesis.cancel();
+    setIsSpeakingVoice(false);
+  };
+
+  // Helper for direct AI message sending with session auto-initialization fallback
   const sendAIMessage = async (options: { text: string }) => {
-    if (!options.text.trim() || isAILoading) return;
+    const textToSend = (options.text || '').trim();
+    if (!textToSend || isAILoading) return;
 
     try {
-      await append({ role: 'user', content: options.text });
+      let sessionIdToUse = activeSessionId;
+      if (!sessionIdToUse) {
+        const newSessionId = await handleCreateSession(textToSend);
+        if (!newSessionId) return;
+        sessionIdToUse = newSessionId;
+      }
+
+      await sendMessage(
+        { text: textToSend },
+        {
+          body: {
+            contextData: {
+              learningGoal: learningGoal || textToSend,
+              learningDetail,
+              tutorName,
+              isReasoning: isReasoningMode,
+              documentText: parsedDoc?.text,
+              sessionId: sessionIdToUse,
+            },
+          },
+        }
+      );
     } catch (err) {
       console.error("Failed to send AI message:", err);
     }
+  };
+
+  // Keep the ref always pointing to the latest sendAIMessage so the recognition
+  // effect can call it without depending on its identity (which changes every render).
+  useEffect(() => {
+    sendAIMessageRef.current = sendAIMessage;
+  });
+
+  // Fetch all user AI sessions
+  useEffect(() => {
+    if (!isAI || !sessionUserId) return;
+
+    const fetchAISessions = async () => {
+      setIsLoadingSessions(true);
+      try {
+        const res = await fetch('/api/chat/sessions');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAiSessions(data);
+          // Auto select most recent session if not specified, only if not explicitly creating a new one
+          if (!activeSessionId && data.length > 0 && !isNewSession) {
+            const mostRecent = data[0];
+            setActiveSessionId(mostRecent.id);
+            router.replace(`/sessions/chat?ai=true&sessionId=${mostRecent.id}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load AI sessions:", err);
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    };
+
+    fetchAISessions();
+  }, [isAI, sessionUserId, activeSessionId]);
+
+  // Load configuration from selected session
+  useEffect(() => {
+    if (!isAI || !activeSessionId || aiSessions.length === 0) return;
+    const currentSession = aiSessions.find(s => s.id === activeSessionId);
+    if (currentSession) {
+      setLearningGoal(currentSession.learningGoal || '');
+      setLearningDetail(currentSession.skillLevel || 'Intermediate');
+      setTutorName(currentSession.tutorName || 'Lumina');
+      setTutorGender((currentSession.tutorGender as 'male' | 'female') || 'female');
+      setIsReasoningMode(currentSession.isReasoning || false);
+      setIsConfigured(true);
+    }
+  }, [isAI, activeSessionId, aiSessions]);
+
+  // Handle deletion of an AI session (called from modal confirm)
+  const handleDeleteAISession = async (idToDel: string) => {
+    // Open modal instead of browser confirm
+    setDeleteModalId(idToDel);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!deleteModalId) return;
+    try {
+      const res = await fetch(`/api/chat/sessions/${deleteModalId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setAiSessions(prev => prev.filter(s => s.id !== deleteModalId));
+        if (activeSessionId === deleteModalId) {
+          // If we deleted the active session, switch to the next available one
+          const remaining = aiSessions.filter(s => s.id !== deleteModalId);
+          if (remaining.length > 0) {
+            router.replace(`/sessions/chat?ai=true&sessionId=${remaining[0].id}`);
+          } else {
+            setActiveSessionId('');
+            router.replace('/sessions/chat?ai=true');
+            setMessages([]);
+            setIsConfigured(false);
+            setLearningGoal('');
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDeleteModalId(null);
+    }
+  };
+
+  // Create a new AI tutor session in Postgres database
+  const handleCreateSession = async (presetGoal?: string): Promise<string | null> => {
+    const goalToUse = presetGoal || learningGoal;
+    if (!(goalToUse || '').trim()) return null;
+
+    try {
+      const res = await fetch('/api/chat/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          learningGoal: goalToUse,
+          skillLevel: learningDetail,
+          tutorName: tutorName,
+          tutorGender: tutorGender,
+          isReasoning: isReasoningMode
+        })
+      });
+      const newSession = await res.json();
+      if (newSession && newSession.id) {
+        setAiSessions(prev => [newSession, ...prev]);
+        setIsConfigured(true);
+        
+        // Update local state instantly!
+        setActiveSessionId(newSession.id);
+        
+        // Clean URL to replace the "new=true" parameter with the actual active sessionId
+        router.replace(`/sessions/chat?ai=true&sessionId=${newSession.id}`);
+        return newSession.id;
+      }
+    } catch (e) {
+      console.error("Failed to create AI session:", e);
+    }
+    return null;
   };
 
   // Auto-unlock UI if we already have a conversation
@@ -367,56 +688,78 @@ function ChatSessionInner() {
         const session = await res.json();
         if (ignore) return;
 
+        let userIdToUse = '';
+        let currentUserToUse = null;
+
         if (session?.user?.id) {
-          setSessionUserId(session.user.id);
-          setCurrentUser(session.user);
+          userIdToUse = session.user.id;
+          currentUserToUse = session.user;
+        } else {
+          // Fetch fallback user info so it works in local sandboxes without active cookies!
+          try {
+            const fallbackRes = await fetch('/api/chat/user');
+            const fallbackUser = await fallbackRes.json();
+            if (fallbackUser && fallbackUser.id) {
+              userIdToUse = fallbackUser.id;
+              currentUserToUse = fallbackUser;
+            }
+          } catch (err) {
+            console.error("Failed to load fallback user:", err);
+          }
+        }
+
+        if (userIdToUse) {
+          setSessionUserId(userIdToUse);
+          setCurrentUser(currentUserToUse);
+          
           const pusherClient = getPusherClient();
-          if (!pusherClient) return;
-          const channel = pusherClient.subscribe('presence-online');
+          if (pusherClient) {
+            const channel = pusherClient.subscribe('presence-online');
 
-          channel.bind('pusher:subscription_succeeded', (members: any) => {
-            const online = new Set<string>();
-            Object.keys(members.members).forEach(id => online.add(id));
-            setOnlineUsers(online);
-          });
-
-          channel.bind('pusher:member_added', (member: any) => {
-            setOnlineUsers(prev => new Set(prev).add(member.id));
-          });
-
-          channel.bind('pusher:member_removed', (member: any) => {
-            setOnlineUsers(prev => {
-              const next = new Set(prev);
-              next.delete(member.id);
-              return next;
-            });
-          });
-
-          // Private DM binding
-          if (peerId && !isAI) {
-            const ids = [session.user.id, peerId].sort();
-            const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
-            const dmChannel = pusherClient.subscribe(dmChannelName);
-
-            // Unbind first to prevent duplicate listeners on the same channel instance
-            dmChannel.unbind('new-message');
-            dmChannel.unbind('peer-typing');
-
-            dmChannel.bind('new-message', (data: any) => {
-              if (data.userId !== session.user.id) {
-                setDmMessages(prev => [...prev, data]);
-              }
+            channel.bind('pusher:subscription_succeeded', (members: any) => {
+              const online = new Set<string>();
+              Object.keys(members.members).forEach(id => online.add(id));
+              setOnlineUsers(online);
             });
 
-            dmChannel.bind('peer-typing', (data: any) => {
-              if (data.userId === peerId) {
-                setIsPeerTyping(data.isTyping);
-                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                if (data.isTyping) {
-                  typingTimeoutRef.current = setTimeout(() => setIsPeerTyping(false), 3500);
+            channel.bind('pusher:member_added', (member: any) => {
+              setOnlineUsers(prev => new Set(prev).add(member.id));
+            });
+
+            channel.bind('pusher:member_removed', (member: any) => {
+              setOnlineUsers(prev => {
+                const next = new Set(prev);
+                next.delete(member.id);
+                return next;
+              });
+            });
+
+            // Private DM binding
+            if (peerId && !isAI) {
+              const ids = [userIdToUse, peerId].sort();
+              const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+              const dmChannel = pusherClient.subscribe(dmChannelName);
+
+              // Unbind first to prevent duplicate listeners on the same channel instance
+              dmChannel.unbind('new-message');
+              dmChannel.unbind('peer-typing');
+
+              dmChannel.bind('new-message', (data: any) => {
+                if (data.userId !== userIdToUse) {
+                  setDmMessages(prev => [...prev, data]);
                 }
-              }
-            });
+              });
+
+              dmChannel.bind('peer-typing', (data: any) => {
+                if (data.userId === peerId) {
+                  setIsPeerTyping(data.isTyping);
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  if (data.isTyping) {
+                    typingTimeoutRef.current = setTimeout(() => setIsPeerTyping(false), 3500);
+                  }
+                }
+              });
+            }
           }
         }
       } catch (err) {
@@ -445,11 +788,12 @@ function ChatSessionInner() {
   useEffect(() => {
     if (!sessionUserId) return;
     if (!isAI && !peerId) return;
+    if (isAI && !activeSessionId) return; // Wait until we have a session ID
 
-    const currentSessionKey = isAI ? 'ai' : peerId;
+    const currentSessionKey = isAI ? activeSessionId : peerId;
     if (hasFetchedHistory.current === currentSessionKey) return;
 
-    const query = isAI ? 'isAi=true' : `peerId=${peerId}`;
+    const query = isAI ? `isAi=true&sessionId=${activeSessionId}` : `peerId=${peerId}`;
     fetch(`/api/chat/messages?${query}`)
       .then(res => res.json())
       .then(data => {
@@ -477,7 +821,7 @@ function ChatSessionInner() {
           }
         });
     }
-  }, [peerId, isAI, sessionUserId, setMessages, isAILoading]);
+  }, [peerId, isAI, activeSessionId, sessionUserId, setMessages, isAILoading]);
 
 
   // Voices Proactive
@@ -490,6 +834,29 @@ function ChatSessionInner() {
     window.speechSynthesis.onvoiceschanged = loadVoices;
     return () => { window.speechSynthesis.onvoiceschanged = null; };
   }, []);
+
+  // Helper: pick a TTS voice matching the tutor's configured gender
+  const getGenderedVoice = useCallback(() => {
+    if (availableVoices.length === 0) return null;
+    const enVoices = availableVoices.filter(v => v.lang.startsWith('en'));
+    
+    if (tutorGender === 'male') {
+      // Prefer recognizable male voices
+      return enVoices.find(v => /\bmale\b/i.test(v.name) && !/female/i.test(v.name))
+        || enVoices.find(v => /David|Daniel|James|Mark|Guy/i.test(v.name))
+        || enVoices.find(v => v.name === 'Google UK English Male')
+        || enVoices.find(v => v.name === 'Google US English')
+        || availableVoices[0];
+    } else {
+      // Prefer recognizable female voices
+      return enVoices.find(v => /female/i.test(v.name))
+        || enVoices.find(v => /Zira|Samantha|Karen|Fiona|Victoria|Susan/i.test(v.name))
+        || enVoices.find(v => v.name === 'Google UK English Female')
+        || enVoices.find(v => v.lang === 'en-US' && v.name.includes('Premium'))
+        || enVoices.find(v => v.name === 'Google US English')
+        || availableVoices[0];
+    }
+  }, [availableVoices, tutorGender]);
 
   // Typing Indicator Trigger
   useEffect(() => {
@@ -505,7 +872,7 @@ function ChatSessionInner() {
       } catch (err) { }
     };
 
-    if (dmInput.trim().length > 0) {
+    if ((dmInput || '').trim().length > 0) {
       notifyTyping(true);
       const timeout = setTimeout(() => notifyTyping(false), 3000);
       return () => clearTimeout(timeout);
@@ -533,11 +900,9 @@ function ChatSessionInner() {
     if (!spokenText) return;
 
     const utterance = new SpeechSynthesisUtterance(spokenText);
-    const googleUS = availableVoices.find(v => v.name === 'Google US English');
-    const premiumEn = availableVoices.find(v => v.lang === 'en-US' && v.name.includes('Premium'));
-    utterance.voice = premiumEn || googleUS || availableVoices[0] || null;
+    utterance.voice = getGenderedVoice();
     utterance.rate = 1.05;
-    utterance.pitch = 1.02;
+    utterance.pitch = tutorGender === 'male' ? 0.9 : 1.05;
 
     utterance.onend = () => setCurrentlySpeakingId(null);
     utterance.onerror = () => setCurrentlySpeakingId(null);
@@ -547,9 +912,9 @@ function ChatSessionInner() {
   }, [availableVoices, currentlySpeakingId]);
 
 
-  // Voice recognition effect — only runs when voice mode is on and not loading
+  // Voice recognition effect — maintains a persistent, crash-free ASR stream during call
   useEffect(() => {
-    if (!showVoiceMode || isAILoading) return;
+    if (!showVoiceMode) return;
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       console.warn("Speech Recognition not supported.");
       return;
@@ -573,8 +938,8 @@ function ChatSessionInner() {
     };
     recognition.onend = () => {
       setIsListening(false);
-      // Restart if still in voice mode
-      if (voiceModeRef.current && !window.speechSynthesis.speaking) {
+      // Restart if still in voice mode (ignores local speaking states to maintain persistent stream)
+      if (voiceModeRef.current) {
         setTimeout(() => {
           if (voiceModeRef.current && recognitionRef.current === recognition) {
             try { recognition.start(); } catch (_e) { }
@@ -584,6 +949,12 @@ function ChatSessionInner() {
     };
 
     recognition.onresult = (event: any) => {
+      // If AI is actively speaking or thinking, ignore transcription results to block feedback loops
+      if (isAILoadingRef.current || isSpeakingVoiceRef.current) {
+        accumulatedTranscript = '';
+        return;
+      }
+
       let currentInterim = '';
       let finalChunk = '';
 
@@ -601,16 +972,23 @@ function ChatSessionInner() {
 
       if (totalSpeech) {
         clearTimeout(silenceTimer);
-        // Build a 2-second leniency buffer so it doesn't cut the user off while they think
+        // Build a 1.5-second buffer so it doesn't cut the user off while they speak
         silenceTimer = setTimeout(() => {
-          if ((accumulatedTranscript + currentInterim).trim()) {
+          const finalSpokenPrompt = (accumulatedTranscript + currentInterim).trim();
+          if (finalSpokenPrompt) {
+            // Guard again inside timeout to handle rapid transitions
+            if (isAILoadingRef.current || isSpeakingVoiceRef.current) {
+              accumulatedTranscript = '';
+              return;
+            }
+
             setIsListening(false);
             window.speechSynthesis.cancel();
-            sendAIMessage({ text: (accumulatedTranscript + currentInterim).trim() });
+            // Use the ref so this effect doesn't depend on sendAIMessage identity
+            sendAIMessageRef.current({ text: finalSpokenPrompt });
             accumulatedTranscript = '';
-            try { recognition.stop(); } catch (e) { }
           }
-        }, 2000);
+        }, 1500);
       }
     };
 
@@ -622,10 +1000,13 @@ function ChatSessionInner() {
         recognitionRef.current = null;
       }
     };
-  }, [showVoiceMode, isAILoading, sendAIMessage]);
+    // IMPORTANT: Only depend on showVoiceMode. The sendAIMessage function is
+    // accessed via sendAIMessageRef so the recognition instance stays stable
+    // and doesn't restart (losing accumulated transcript) on every state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVoiceMode]);
 
   // Voice TTS effect
-  const lastSpokenMsgId = useRef<string>('');
   useEffect(() => {
     if (!showVoiceMode || isAILoading || aiMessages.length === 0) return;
 
@@ -644,22 +1025,19 @@ function ChatSessionInner() {
     if (!textToSpeak.trim()) return;
 
     window.speechSynthesis.cancel();
+    setIsSpeakingVoice(true);
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    const googleUS = availableVoices.find(v => v.name === 'Google US English');
-    const premiumEn = availableVoices.find(v => v.lang === 'en-US' && v.name.includes('Premium'));
-    utterance.voice = premiumEn || googleUS || availableVoices[0] || null;
+    utterance.voice = getGenderedVoice();
     utterance.rate = 1.05;
-    utterance.pitch = 1.02;
+    utterance.pitch = tutorGender === 'male' ? 0.9 : 1.05;
 
     utterance.onend = () => {
-      if (voiceModeRef.current && recognitionRef.current) {
-        setTimeout(() => {
-          if (voiceModeRef.current) {
-            try { recognitionRef.current?.start(); } catch (_e) { }
-          }
-        }, 500);
-      }
+      setIsSpeakingVoice(false);
+    };
+
+    utterance.onerror = () => {
+      setIsSpeakingVoice(false);
     };
 
     window.speechSynthesis.speak(utterance);
@@ -669,14 +1047,62 @@ function ChatSessionInner() {
   const handleSendDM = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isAI) {
-      if (!dmInput.trim() || isAILoading) return;
-      const textToSend = dmInput;
-      setDmInput('');
-      sendAIMessage({ text: textToSend });
+      if (!(aiInput || '').trim() || isAILoading) return;
+      const textToSend = aiInput;
+      
+      // Clear input state immediately!
+      setAiInput('');
+
+      if (!activeSessionId) {
+        // Create session behind the scenes
+        const newSessionId = await handleCreateSession(textToSend);
+        if (newSessionId) {
+          try {
+            await sendMessage(
+              { text: textToSend },
+              {
+                body: {
+                  contextData: {
+                    learningGoal: textToSend,
+                    learningDetail,
+                    tutorName,
+                    isReasoning: isReasoningMode,
+                    documentText: parsedDoc?.text,
+                    sessionId: newSessionId,
+                  },
+                },
+              }
+            );
+          } catch (err) {
+            console.error("Failed to send first AI message:", err);
+          }
+        }
+      } else {
+        // Send native Vercel AI SDK submit request!
+        try {
+          await sendMessage(
+            { text: textToSend },
+            {
+              body: {
+                contextData: {
+                  learningGoal,
+                  learningDetail,
+                  tutorName,
+                  isReasoning: isReasoningMode,
+                  documentText: parsedDoc?.text,
+                  sessionId: activeSessionId,
+                },
+              },
+            }
+          );
+        } catch (err) {
+          console.error("Failed to send AI message:", err);
+        }
+      }
       return;
     }
 
-    if (!dmInput.trim() || !peerId || isLoadingDM) return;
+    if (!(dmInput || '').trim() || !peerId || isLoadingDM) return;
 
     const msgPayload = {
       id: crypto.randomUUID(),
@@ -720,6 +1146,10 @@ function ChatSessionInner() {
           currentPeerId={peerId || (isAI ? 'test-peer-id' : '')}
           onlineUsers={onlineUsers}
           userId={sessionUserId}
+          isAIMode={isAI}
+          aiSessions={aiSessions}
+          selectedSessionId={activeSessionId}
+          onDeleteSession={handleDeleteAISession}
         />
 
         {/* Main Chat Area */}
@@ -785,6 +1215,7 @@ function ChatSessionInner() {
               {isAI && (
                 <div className="flex items-center gap-1.5 bg-bg-secondary p-1 rounded-full border border-border/50">
                   <button
+                    id="chat-voice-mode-button"
                     onClick={() => setShowVoiceMode(true)}
                     className={`p-2 rounded-full transition-all ${showVoiceMode ? 'bg-primary-500 text-white shadow-primary-500/20 animate-pulse' : 'hover:bg-primary-500/10 text-primary-500 transition-all hover:scale-105 active:scale-95'}`}
                     title="Enter Voice Mode"
@@ -792,6 +1223,7 @@ function ChatSessionInner() {
                     <Phone size={18} />
                   </button>
                   <button
+                    id="chat-tutor-settings-button"
                     onClick={() => setShowConfig(!showConfig)}
                     className={`p-2 rounded-full transition-all ${showConfig ? 'bg-primary-500 text-white' : 'text-text-muted hover:text-primary-500 hover:bg-primary-500/10'}`}
                     title="Tutor Settings"
@@ -800,6 +1232,18 @@ function ChatSessionInner() {
                   </button>
                 </div>
               )}
+              <button
+                id="chat-tutorial-trigger-button"
+                onClick={() => {
+                  if ((window as any).restartChatTour) {
+                    (window as any).restartChatTour();
+                  }
+                }}
+                className="p-2.5 text-text-muted hover:bg-bg-secondary rounded-full hover:text-primary-500 transition-all active:scale-95"
+                title="Start Chat Tutorial"
+              >
+                <Lightbulb size={20} className="text-amber-500/80" />
+              </button>
               <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
                 className={`p-2.5 rounded-full transition-all active:scale-95 ${isFullscreen ? 'bg-primary-500 text-white' : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'}`}
@@ -811,93 +1255,159 @@ function ChatSessionInner() {
 
           <div className="flex flex-1 overflow-hidden relative">
 
-            {/* Voice 2 Voice Full Modal Overlay */}
-            {isAI && showVoiceMode && (
-              <div className="absolute inset-0 bg-bg-elevated/95 backdrop-blur-xl z-40 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-200">
-                <div className="relative mb-12 flex items-center justify-center">
-                  {/* Outer pulsing rings when listening */}
-                  {isListening && (
-                    <>
-                      <div className="absolute w-48 h-48 rounded-full bg-primary-500/10 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-                      <div className="absolute w-40 h-40 rounded-full bg-primary-500/20 animate-[ping_1.5s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-                    </>
-                  )}
-                  {/* Central Orb */}
-                  <div className={`w-32 h-32 rounded-full shadow-2xl shadow-primary-500/30 flex items-center justify-center relative z-10 transition-all duration-500 ${isListening ? 'bg-gradient-to-br from-primary-400 to-amber-600 scale-105' : 'bg-bg-secondary border-2 border-primary-500/50'}`}>
-                    {isListening ? (
-                      <Mic size={50} className="text-white animate-pulse" />
-                    ) : (
-                      <Bot size={50} className="text-primary-500" />
-                    )}
+
+
+
+
+            {/* Chat Messages or AI Setup Onboarding Card */}
+            {isAI && !activeSessionId ? (
+              <div className="flex-1 flex items-start justify-center bg-bg-secondary overflow-y-auto py-6">
+                <div id="chat-onboarding-card" className="w-full max-w-md bg-bg-elevated border border-border rounded-2xl shadow-2xl relative overflow-hidden mx-4 my-auto">
+                  {/* Decorative glows */}
+                  <div className="absolute top-0 right-0 -mt-10 -mr-10 w-24 h-24 bg-primary-500/10 rounded-full blur-2xl"></div>
+                  <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl"></div>
+
+                  <div className="relative z-10 p-5">
+                    {/* Header */}
+                    <div className="text-center mb-4">
+                      <div className="inline-flex p-2.5 bg-gradient-to-br from-primary-400 to-amber-600 rounded-xl text-white shadow-lg mb-2">
+                        <Bot size={22} />
+                      </div>
+                      <h2 className="text-lg font-display font-extrabold text-text-primary tracking-tight">Configure AI Tutor</h2>
+                      <p className="text-[11px] text-text-secondary mt-0.5">Setup your learning companion</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Step 1: Tutor Name */}
+                      <div>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Tutor Name</label>
+                        <input
+                          type="text"
+                          value={tutorName}
+                          onChange={(e) => setTutorName(e.target.value)}
+                          placeholder="e.g. Lumina, Socrates"
+                          className="w-full h-9 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm"
+                        />
+                      </div>
+
+                      {/* Voice Gender */}
+                      <div>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Voice Gender</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {(['female', 'male'] as const).map(g => (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => setTutorGender(g)}
+                              className={`h-8 rounded-lg border font-bold text-[11px] transition-all capitalize ${
+                                tutorGender === g
+                                  ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
+                                  : 'bg-bg-primary text-text-secondary border-border hover:bg-bg-secondary'
+                              }`}
+                            >
+                              {g === 'female' ? '♀ Female' : '♂ Male'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Step 2: Learning Goal */}
+                      <div>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1 block">What to learn?</label>
+                        <textarea
+                          value={learningGoal}
+                          onChange={(e) => setLearningGoal(e.target.value)}
+                          placeholder="e.g. Master React Hooks, Quantum Physics..."
+                          rows={2}
+                          className="w-full p-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm resize-none"
+                        />
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {['React Hooks', 'Quantum Physics', 'Financial Literacy', 'Python for DS'].map(suggest => (
+                            <button
+                              key={suggest}
+                              type="button"
+                              onClick={() => {
+                                setLearningGoal(suggest);
+                                if (suggest === 'React Hooks') { setTutorName('Lumina'); setTutorGender('female'); }
+                                else if (suggest === 'Quantum Physics') { setTutorName('Socrates'); setTutorGender('male'); }
+                                else if (suggest === 'Financial Literacy') { setTutorName('Kuber'); setTutorGender('male'); }
+                                else if (suggest === 'Python for DS') { setTutorName('PyTutor'); setTutorGender('female'); }
+                              }}
+                              className="text-[9px] font-bold px-2 py-0.5 bg-bg-secondary text-text-secondary border border-border rounded-full hover:border-primary-500 hover:text-primary-500 transition-all"
+                            >
+                              {suggest}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Step 3: Difficulty Level */}
+                      <div>
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1 block">Skill Level</label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {['Beginner', 'Intermediate', 'Advanced'].map(level => (
+                            <button
+                              key={level}
+                              type="button"
+                              onClick={() => setLearningDetail(level)}
+                              className={`h-8 rounded-lg border font-bold text-[11px] transition-all ${
+                                learningDetail === level
+                                  ? 'bg-primary-500 text-white border-primary-500 shadow-sm'
+                                  : 'bg-bg-primary text-text-secondary border-border hover:bg-bg-secondary'
+                              }`}
+                            >
+                              {level}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Step 4: Reasoning Mode */}
+                      <label className="flex items-center gap-2 cursor-pointer group bg-bg-secondary p-2.5 rounded-lg border border-border hover:border-primary-500/30 transition-all">
+                        <input
+                          type="checkbox"
+                          checked={isReasoningMode}
+                          onChange={(e) => setIsReasoningMode(e.target.checked)}
+                          className="rounded border-border text-primary-500 focus:ring-primary-500 w-3.5 h-3.5"
+                        />
+                        <div>
+                          <span className="text-[11px] font-bold text-text-primary group-hover:text-primary-500 transition-colors block leading-tight">Thinking Mode</span>
+                          <span className="text-[9px] text-text-muted block leading-tight">Step-by-step reasoning for complex logic</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Submit */}
+                    <button
+                      onClick={() => handleCreateSession()}
+                      disabled={!(learningGoal || '').trim()}
+                      className="w-full h-9 mt-4 bg-gradient-to-r from-primary-500 to-amber-600 text-white font-bold text-xs rounded-lg hover:scale-[1.01] active:scale-[0.99] transition-all shadow-md disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-1.5"
+                    >
+                      <Zap size={14} />
+                      Initialize Tutor
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex bg-primary-500/10 rounded-full px-4 py-1.5 border border-primary-500/20 mb-6 animate-pulse">
-                  <div className="text-[10px] font-bold text-primary-500 uppercase tracking-widest">Voice Interaction Enabled</div>
-                </div>
-
-                <h2 className="text-4xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary-500 to-amber-400 tracking-tight mb-3">{tutorName} Voice</h2>
-                <div className="text-2xl font-mono text-primary-500 font-bold mb-6">{formatDuration(callDuration)}</div>
-
-                <div className="px-5 py-2.5 bg-bg-secondary/80 backdrop-blur-md rounded-full border border-border shadow-sm flex items-center gap-3">
-                  <span className="relative flex h-3 w-3">
-                    <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${isListening ? 'bg-red-400 animate-ping' : 'bg-primary-400'}`}></span>
-                    <span className={`relative inline-flex rounded-full h-3 w-3 ${isListening ? 'bg-red-500' : 'bg-primary-500'}`}></span>
-                  </span>
-                  <p className="text-text-secondary font-medium">
-                    {isListening ? 'Listening... Just speak to barge in!' : isAILoading ? `${tutorName} is thinking...` : 'Waiting...'}
-                  </p>
-                </div>
-
-                {/* Call Controls */}
-                <div className="mt-12 flex items-center gap-8">
-                  <button
-                    className="w-16 h-16 rounded-full bg-red-500/10 border-2 border-red-500/20 hover:bg-red-500 text-red-500 hover:text-white flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-90 group"
-                    onClick={stopVoiceMode}
-                    title="End Call"
-                  >
-                    <Phone size={24} className="rotate-[135deg] group-hover:animate-shake" />
-                  </button>
-                </div>
-
-                <div className="absolute bottom-10 text-xs text-text-muted text-center max-w-sm px-6">
-                  Voice mode continuously performs full-duplex conversations. Speak naturally and you can interrupt {tutorName} at any time.
-                </div>
               </div>
+            ) : (
+              <MessageList
+                messages={activeMessages}
+                isAI={isAI}
+                sessionUserId={sessionUserId}
+                tutorName={tutorName}
+                learningGoal={learningGoal}
+                learningDetail={learningDetail}
+                currentlySpeakingId={currentlySpeakingId}
+                onToggleSpeech={handleToggleSpeech}
+                markdownComponents={markdownComponents}
+                getMessageText={getMessageText}
+                isConfigured={isConfigured}
+                peerImage={selectedUser?.avatarUrl}
+                userImage={currentUser?.avatarUrl}
+                isPeerTyping={isPeerTyping}
+                peerName={selectedUser?.name}
+              />
             )}
-
-            {/* Start Screen Overlay */}
-            {isAI && !isConfigured && aiMessages.length === 0 && (
-              <div className="absolute inset-0 bg-bg-secondary/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-8 text-center border-l border-white/5">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shadow-2xl mb-6 shadow-primary-500/20">
-                  <Brain size={40} />
-                </div>
-                <h2 className="text-3xl font-display font-extrabold mb-3 text-text-primary">Configure Your AI Tutor</h2>
-                <p className="text-text-secondary max-w-md mb-8 text-sm">Before we begin, tell Lumina what you want to learn so it can adapt to your skill level and goals.</p>
-                <button onClick={() => setShowConfig(true)} className="px-8 py-3.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl font-bold shadow-lg shadow-primary-500/20 active:scale-95 transition-all w-full max-w-sm">
-                  Set Learning Goal
-                </button>
-              </div>
-            )}
-
-            {/* Chat Messages */}
-            <MessageList
-              messages={activeMessages}
-              isAI={isAI}
-              sessionUserId={sessionUserId}
-              tutorName={tutorName}
-              learningGoal={learningGoal}
-              learningDetail={learningDetail}
-              currentlySpeakingId={currentlySpeakingId}
-              onToggleSpeech={handleToggleSpeech}
-              markdownComponents={markdownComponents}
-              getMessageText={getMessageText}
-              isConfigured={isConfigured}
-              peerImage={selectedUser?.avatarUrl}
-              userImage={currentUser?.avatarUrl}
-              isPeerTyping={isPeerTyping}
-              peerName={selectedUser?.name}
-            />
 
             {/* Config Sidebar (for AI mode) */}
             {isAI && showConfig && (
@@ -942,7 +1452,7 @@ function ChatSessionInner() {
           {/* Bottom Input Area */}
           <div className="p-4 bg-bg-elevated border-t border-border sticky bottom-0 z-10">
             <form onSubmit={handleSendDM} className="max-w-4xl mx-auto w-full">
-              <div className="bg-bg-secondary border border-border rounded-2xl shadow-sm p-1.5 flex items-center gap-1 focus-within:ring-2 ring-primary-500/20 transition-all">
+              <div id="chat-input-bar" className="bg-bg-secondary border border-border rounded-2xl shadow-sm p-1.5 flex items-center gap-1 focus-within:ring-2 ring-primary-500/20 transition-all">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -950,7 +1460,7 @@ function ChatSessionInner() {
                   accept=".pdf,.doc,.docx,.txt"
                   onChange={handleFileUpload}
                 />
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 md:p-3 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none" title="Attach document">
+                <button id="chat-upload-document-button" type="button" onClick={() => fileInputRef.current?.click()} className="p-2.5 md:p-3 text-text-muted hover:text-text-primary hover:bg-bg-elevated rounded-xl transition-colors shrink-0 outline-none" title="Attach document">
                   {isUploading ? <span className="w-4 h-4 rounded-full border-2 border-text-muted border-t-text-primary animate-spin block"></span> : <Paperclip size={20} />}
                 </button>
 
@@ -965,6 +1475,7 @@ function ChatSessionInner() {
                       <Mic size={20} />
                     </button>
                     <button
+                      id="chat-reasoning-mode-button"
                       type="button"
                       onClick={() => setIsReasoningMode(!isReasoningMode)}
                       className={`p-2.5 transition-colors rounded-xl ${isReasoningMode ? 'text-amber-500' : 'text-text-muted hover:text-amber-600'}`}
@@ -979,27 +1490,103 @@ function ChatSessionInner() {
                   autoFocus
                   className="flex-1 bg-transparent border-none py-3 px-2 text-[15px] outline-none text-text-primary min-w-0"
                   placeholder={isAI ? "Ask Lumina anything..." : "Message your peer..."}
-                  value={dmInput}
-                  onChange={(e) => setDmInput(e.target.value)}
+                  value={isAI ? aiInput : dmInput}
+                  onChange={isAI ? handleInputChange : (e) => setDmInput(e.target.value)}
                   disabled={isAI && !isConfigured}
                 />
                 <button
                   type="submit"
-                  disabled={!dmInput.trim() || isAILoading || isLoadingDM || (isAI && !isConfigured)}
-                  className={`p-2.5 md:p-3 rounded-xl transition-all shrink-0 ml-1 outline-none ${(dmInput.trim() || isAILoading) ? 'bg-primary-500 text-white shadow-md' : 'bg-transparent text-text-muted'}`}
+                  disabled={!(isAI ? (aiInput || '').trim() : (dmInput || '').trim()) || isAILoading || isLoadingDM || (isAI && !isConfigured)}
+                  className={`p-2.5 md:p-3 rounded-xl transition-all shrink-0 ml-1 outline-none ${((isAI ? (aiInput || '').trim() : (dmInput || '').trim()) || isAILoading) ? 'bg-primary-500 text-white shadow-md' : 'bg-transparent text-text-muted'}`}
                 >
                   {isAILoading ? (
                     <span className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin block"></span>
                   ) : (
-                    <Send size={20} className={dmInput.trim() ? 'translate-x-0.5' : ''} />
+                    <Send size={20} className={(isAI ? (aiInput || '').trim() : (dmInput || '').trim()) ? 'translate-x-0.5' : ''} />
                   )}
                 </button>
               </div>
             </form>
           </div>
 
+            {/* Voice 2 Voice Full Modal Overlay (Bounded strictly inside Chat Window Area) */}
+            {isAI && showVoiceMode && (
+              <div className="absolute inset-0 bg-[#0A0A0A]/95 backdrop-blur-2xl z-40 flex flex-col items-center justify-between py-16 px-6 animate-in fade-in duration-300 pointer-events-auto">
+                {/* Top Section */}
+                <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md animate-pulse">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_#10B981]"></span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/80">{tutorName} Voice Active</span>
+                </div>
+
+                {/* Center Section: Pulsing Waveform Visualizer & Elegant Status */}
+                <div className="flex flex-col items-center justify-center my-auto w-full max-w-md">
+                  <WaveformVisualizer state={isSpeakingVoice ? 'speaking' : isListening ? 'listening' : isAILoading ? 'thinking' : 'idle'} />
+                  
+                  <p className="text-sm font-medium tracking-wide text-white/50 text-center animate-pulse mt-4 transition-all duration-300">
+                    {isSpeakingVoice 
+                      ? `${tutorName} is speaking` 
+                      : isListening 
+                        ? 'Listening... Speak naturally' 
+                        : isAILoading 
+                          ? 'Formulating response...' 
+                          : 'Waiting'}
+                  </p>
+                </div>
+
+                {/* Bottom Section: Call Controls with Instant Interrupt Button */}
+                <div className="flex items-center gap-6 z-10">
+                  {isSpeakingVoice && (
+                    <button
+                      onClick={handleInterrupt}
+                      className="flex items-center gap-2 px-6 py-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 hover:text-amber-400 rounded-full border border-amber-500/25 text-xs font-bold uppercase tracking-wider transition-all duration-300 hover:scale-105 active:scale-95 animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.15)] pointer-events-auto cursor-pointer outline-none"
+                      title="Interrupt and speak now"
+                    >
+                      <Mic size={14} />
+                      Interrupt
+                    </button>
+                  )}
+                  <button
+                    onClick={stopVoiceMode}
+                    className="w-14 h-14 rounded-full bg-red-500/10 hover:bg-red-500 border border-red-500/20 text-red-500 hover:text-white flex items-center justify-center shadow-lg transition-all hover:scale-110 active:scale-90 group pointer-events-auto cursor-pointer outline-none"
+                    title="End Call"
+                  >
+                    <Phone size={20} className="rotate-[135deg] group-hover:animate-shake" />
+                  </button>
+                </div>
+              </div>
+            )}
+
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalId && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-bg-elevated border border-border rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6 animate-in zoom-in-95 duration-200">
+            <div className="text-center">
+              <div className="inline-flex p-3 bg-red-500/10 rounded-xl mb-3">
+                <X size={24} className="text-red-500" />
+              </div>
+              <h3 className="text-lg font-display font-bold text-text-primary mb-1">Delete Session?</h3>
+              <p className="text-sm text-text-secondary">This will permanently remove this learning session and all its messages.</p>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setDeleteModalId(null)}
+                className="flex-1 h-10 rounded-xl border border-border bg-bg-secondary text-text-primary font-semibold text-sm hover:bg-bg-primary transition-all active:scale-[0.98]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteSession}
+                className="flex-1 h-10 rounded-xl bg-red-500 text-white font-semibold text-sm hover:bg-red-600 transition-all active:scale-[0.98] shadow-md"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Schedule Form Modal */}
       <ScheduleMeetModal
@@ -1010,6 +1597,7 @@ function ChatSessionInner() {
           setDmMessages(prev => [...prev, message]);
         }}
       />
+      <ChatTour isAI={isAI} activeSessionId={activeSessionId} />
     </div>
   );
 }

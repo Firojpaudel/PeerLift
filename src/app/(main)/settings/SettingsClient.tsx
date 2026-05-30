@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { User, Shield, Bell, Monitor, Camera, Loader2 } from 'lucide-react';
+import { User, Shield, Bell, Monitor, Camera, Loader2, Plus, Trash2, BookOpen, Award } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 
@@ -22,6 +22,31 @@ export function SettingsClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // --- Skills Management State ---
+  const [skillsOffered, setSkillsOffered] = useState<any[]>([]);
+  const [skillsWanted, setSkillsWanted] = useState<any[]>([]);
+  const [allSkills, setAllSkills] = useState<any[]>([]);
+  const [isLoadingSkills, setIsLoadingSkills] = useState(true);
+  const [isAddingSkill, setIsAddingSkill] = useState(false);
+
+  // Add Skill Form state
+  const [selectedSkillId, setSelectedSkillId] = useState('');
+  const [selectedSkillType, setSelectedSkillType] = useState<'teaching' | 'learning'>('teaching');
+  const [selectedSkillLevel, setSelectedSkillLevel] = useState('INTERMEDIATE');
+  const [selectedSkillNote, setSelectedSkillNote] = useState('');
+
+  // Synchronize Tab from URL Search Params (?tab=profile)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['profile', 'security', 'notifications', 'preferences'].includes(tabParam)) {
+        setActiveTab(tabParam as Tab);
+      }
+    }
+  }, []);
+
+  // Fetch Profile Data
   useEffect(() => {
     fetch('/api/user/profile')
       .then(res => res.json())
@@ -37,6 +62,27 @@ export function SettingsClient() {
       .catch(err => {
         console.error(err);
         setIsLoading(false);
+      });
+  }, []);
+
+  // Fetch Skills Data
+  useEffect(() => {
+    fetch('/api/user/skills')
+      .then(res => res.json())
+      .then(data => {
+        if (data.allSkills) {
+          setAllSkills(data.allSkills);
+          if (data.allSkills.length > 0) {
+            setSelectedSkillId(data.allSkills[0].id);
+          }
+        }
+        if (data.skillsOffered) setSkillsOffered(data.skillsOffered);
+        if (data.skillsWanted) setSkillsWanted(data.skillsWanted);
+        setIsLoadingSkills(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch skills:", err);
+        setIsLoadingSkills(false);
       });
   }, []);
 
@@ -62,6 +108,64 @@ export function SettingsClient() {
       toast.error("An error occurred.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAddSkill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSkillId) {
+      toast.error("Please select a skill to add.");
+      return;
+    }
+    setIsAddingSkill(true);
+    try {
+      const res = await fetch('/api/user/skills', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skillId: selectedSkillId,
+          type: selectedSkillType,
+          level: selectedSkillLevel,
+          note: selectedSkillNote
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        if (selectedSkillType === 'teaching') {
+          setSkillsOffered(prev => [...prev, data]);
+        } else {
+          setSkillsWanted(prev => [...prev, data]);
+        }
+        setSelectedSkillNote('');
+        toast.success("Skill added to profile successfully!");
+      } else {
+        toast.error(data.error || "Failed to add skill.");
+      }
+    } catch (err) {
+      toast.error("Failed to add skill.");
+    } finally {
+      setIsAddingSkill(false);
+    }
+  };
+
+  const handleDeleteSkill = async (userSkillId: string, type: 'teaching' | 'learning') => {
+    try {
+      const res = await fetch(`/api/user/skills?id=${userSkillId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        if (type === 'teaching') {
+          setSkillsOffered(prev => prev.filter(s => s.id !== userSkillId));
+        } else {
+          setSkillsWanted(prev => prev.filter(s => s.id !== userSkillId));
+        }
+        toast.success("Skill removed from profile.");
+      } else {
+        toast.error("Failed to remove skill.");
+      }
+    } catch (err) {
+      toast.error("Failed to remove skill.");
     }
   };
 
@@ -251,6 +355,185 @@ export function SettingsClient() {
                   </button>
                 </div>
               </form>
+            </section>
+
+            {/* Skills Management Section */}
+            <section className="bg-bg-elevated rounded-2xl border border-border p-6 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <h2 className="text-xl font-bold text-text-primary mb-2 flex items-center gap-2">
+                <BookOpen className="text-primary-500" size={22} />
+                My Skills (Post & Share)
+              </h2>
+              <p className="text-sm text-text-secondary mb-6">
+                Define the skills you can offer to teach other peers and the skills you are actively looking to learn.
+              </p>
+
+              {/* Add a Skill Form */}
+              <form onSubmit={handleAddSkill} className="bg-bg-secondary/40 border border-border p-5 rounded-2xl space-y-4 mb-8">
+                <h3 className="font-bold text-text-primary text-[14px] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Plus className="text-primary-500" size={16} />
+                  Add a Skill to Profile
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Select Skill</label>
+                    <select 
+                      value={selectedSkillId} 
+                      onChange={(e) => setSelectedSkillId(e.target.value)}
+                      className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm"
+                    >
+                      {allSkills.map(skill => (
+                        <option key={skill.id} value={skill.id}>{skill.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Skill Classification</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSkillType('teaching')}
+                        className={`flex-1 h-11 rounded-lg border font-semibold text-xs transition-all ${
+                          selectedSkillType === 'teaching'
+                            ? 'bg-primary-500 text-white border-primary-500 shadow-sm shadow-primary-500/10 animate-pulse'
+                            : 'bg-bg-primary text-text-secondary border-border hover:bg-bg-secondary'
+                        }`}
+                      >
+                        I Can Teach This
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSkillType('learning')}
+                        className={`flex-1 h-11 rounded-lg border font-semibold text-xs transition-all ${
+                          selectedSkillType === 'learning'
+                            ? 'bg-primary-500 text-white border-primary-500 shadow-sm shadow-primary-500/10 animate-pulse'
+                            : 'bg-bg-primary text-text-secondary border-border hover:bg-bg-secondary'
+                        }`}
+                      >
+                        I Want to Learn
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedSkillType === 'teaching' && (
+                  <div className="space-y-1.5 animate-in fade-in duration-200">
+                    <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Proficiency Level</label>
+                    <select
+                      value={selectedSkillLevel}
+                      onChange={(e) => setSelectedSkillLevel(e.target.value)}
+                      className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm"
+                    >
+                      <option value="BEGINNER">Beginner (Basic understanding)</option>
+                      <option value="INTERMEDIATE">Intermediate (Comfortable practicing/assisting)</option>
+                      <option value="ADVANCED">Advanced (Expert understanding)</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Expertise Details (Optional)</label>
+                  <input
+                    type="text"
+                    value={selectedSkillNote}
+                    onChange={(e) => setSelectedSkillNote(e.target.value)}
+                    placeholder="e.g. 2 years of building apps, or completed 3 courses."
+                    maxLength={200}
+                    className="w-full h-11 px-3 rounded-lg border border-border bg-bg-primary text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm"
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isAddingSkill || isLoadingSkills || allSkills.length === 0}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white font-bold rounded-xl hover:bg-primary-600 active:scale-95 transition-all shadow-md shadow-primary-500/10 disabled:opacity-75"
+                  >
+                    {isAddingSkill ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    {isAddingSkill ? "Adding Skill..." : "Add to Profile"}
+                  </button>
+                </div>
+              </form>
+
+              {/* Skills Lists */}
+              {isLoadingSkills ? (
+                <div className="flex flex-col items-center py-6 justify-center text-text-muted">
+                  <Loader2 size={24} className="animate-spin text-primary-500 mb-2" />
+                  <span className="text-xs font-semibold">Loading profile skills...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Skills Offered (Teaching) */}
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-text-primary text-[13px] uppercase tracking-widest flex items-center gap-1.5 border-b border-border pb-2">
+                      <Award className="text-green-500" size={16} />
+                      Skills I Can Teach
+                    </h4>
+                    {skillsOffered.length === 0 ? (
+                      <p className="text-xs text-text-muted italic py-2">You haven&apos;t added any teaching skills yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {skillsOffered.map((us) => (
+                          <div key={us.id} className="flex items-start justify-between p-3.5 rounded-xl bg-bg-secondary border border-border group hover:border-green-500/30 transition-all">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-text-primary">{us.skill?.name}</span>
+                                <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wider ${
+                                  us.level === 'ADVANCED' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                                  us.level === 'INTERMEDIATE' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                                  'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                                }`}>
+                                  {us.level}
+                                </span>
+                              </div>
+                              {us.note && <p className="text-[11px] text-text-muted italic leading-relaxed">{us.note}</p>}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSkill(us.id, 'teaching')}
+                              className="p-1.5 text-text-muted hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+                              title="Delete skill"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Skills Wanted (Learning) */}
+                  <div className="space-y-4">
+                    <h4 className="font-bold text-text-primary text-[13px] uppercase tracking-widest flex items-center gap-1.5 border-b border-border pb-2">
+                      <BookOpen className="text-blue-500" size={16} />
+                      Skills I Want to Learn
+                    </h4>
+                    {skillsWanted.length === 0 ? (
+                      <p className="text-xs text-text-muted italic py-2">You haven&apos;t added any learning skills yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {skillsWanted.map((us) => (
+                          <div key={us.id} className="flex items-start justify-between p-3.5 rounded-xl bg-bg-secondary border border-border group hover:border-blue-500/30 transition-all">
+                            <div className="space-y-1">
+                              <span className="font-bold text-sm text-text-primary block">{us.skill?.name}</span>
+                              {us.note && <p className="text-[11px] text-text-muted italic leading-relaxed">{us.note}</p>}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSkill(us.id, 'learning')}
+                              className="p-1.5 text-text-muted hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+                              title="Delete skill"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="bg-bg-elevated rounded-2xl border border-border p-6 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">

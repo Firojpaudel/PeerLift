@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Bot, Users } from "lucide-react";
+import { Search, Bot, Users, Plus, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface Contact {
@@ -19,9 +19,21 @@ interface ChatSidebarProps {
   currentPeerId: string;
   onlineUsers: Set<string>;
   userId: string;
+  isAIMode?: boolean;
+  aiSessions?: any[];
+  selectedSessionId?: string;
+  onDeleteSession?: (id: string) => void;
 }
 
-export function ChatSidebar({ currentPeerId, onlineUsers, userId }: ChatSidebarProps) {
+export function ChatSidebar({
+  currentPeerId,
+  onlineUsers,
+  userId,
+  isAIMode,
+  aiSessions,
+  selectedSessionId,
+  onDeleteSession,
+}: ChatSidebarProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +67,7 @@ export function ChatSidebar({ currentPeerId, onlineUsers, userId }: ChatSidebarP
   const requests = filteredContacts.filter(c => c.status === 'PENDING' || c.status === 'MESSAGE_ONLY');
 
   return (
-    <div className="w-[320px] border-r border-border h-full flex-col bg-bg-elevated hidden md:flex">
+    <div id="chat-sidebar" className="w-[320px] border-r border-border h-full flex-col bg-bg-elevated hidden md:flex">
       <div className="p-5 border-b border-border">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-2xl font-display font-extrabold text-text-primary flex items-center gap-2">
@@ -75,22 +87,66 @@ export function ChatSidebar({ currentPeerId, onlineUsers, userId }: ChatSidebarP
       </div>
 
       <div className="flex-1 overflow-y-auto pt-4 space-y-6">
-        {/* AI Assistant Special Entry */}
-        <div className="px-3">
-          <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest pl-3 mb-2 block">Learning Assistants</span>
-          <Link 
-            href="/sessions/chat?ai=true" 
-            className={`flex items-center gap-3 p-3 rounded-xl transition-all group ${currentPeerId === 'test-peer-id' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'hover:bg-bg-secondary text-text-primary'}`}
-          >
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm relative ${currentPeerId === 'test-peer-id' ? 'bg-white/20' : 'bg-gradient-to-br from-primary-400 to-amber-600'}`}>
-              <Bot size={20} className={currentPeerId === 'test-peer-id' ? 'text-white' : 'text-white'} />
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-[14px] truncate">Lumina AI</h3>
-              <p className={`text-[11px] truncate ${currentPeerId === 'test-peer-id' ? 'text-white/80' : 'text-text-muted font-medium'}`}>Web-search & FastRTC enabled...</p>
-            </div>
-          </Link>
+        {/* AI Assistant Sessions Stack */}
+        <div id="chat-sidebar-sessions" className="px-3 space-y-1">
+          <div className="flex items-center justify-between mb-2 px-3">
+            <span className="text-[10px] font-bold text-text-muted uppercase tracking-widest block">Learning Assistants</span>
+            <Link
+              href="/sessions/chat?ai=true&new=true"
+              className="p-1 rounded bg-bg-secondary hover:text-primary-500 hover:bg-primary-500/10 text-text-muted transition-all active:scale-95"
+              title="Create New AI Session"
+              id="chat-create-session-button"
+            >
+              <Plus size={14} />
+            </Link>
+          </div>
+          {aiSessions && aiSessions.length > 0 ? (
+            aiSessions.map(session => (
+              <div
+                key={session.id}
+                className="relative group/session"
+              >
+                <Link
+                  href={`/sessions/chat?ai=true&sessionId=${session.id}`}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-all group ${selectedSessionId === session.id ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'hover:bg-bg-secondary text-text-primary'}`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm relative ${selectedSessionId === session.id ? 'bg-white/20' : 'bg-gradient-to-br from-primary-400 to-amber-600'}`}>
+                    <Bot size={20} className="text-white" />
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                  </div>
+                  <div className="flex-1 min-w-0 pr-6">
+                    <h3 className="font-bold text-[14px] truncate">{session.tutorName || "AI Tutor"}</h3>
+                    <p className={`text-[11px] truncate ${selectedSessionId === session.id ? 'text-white/80' : 'text-text-muted font-medium'}`}>{session.title || session.learningGoal || "No topic set"} • {session.skillLevel}</p>
+                  </div>
+                </Link>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (onDeleteSession) onDeleteSession(session.id);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover/session:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
+                  title="Delete Session"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))
+          ) : (
+            <Link
+              href="/sessions/chat?ai=true&new=true"
+              className={`flex items-center gap-3 p-3 rounded-xl transition-all group ${isAIMode && !selectedSessionId ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' : 'hover:bg-bg-secondary text-text-primary'}`}
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm relative bg-gradient-to-br from-primary-400 to-amber-600`}>
+                <Bot size={20} className="text-white" />
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-[14px] truncate">New AI Tutor</h3>
+                <p className={`text-[11px] truncate text-text-muted font-medium`}>Click to setup your first tutor</p>
+              </div>
+            </Link>
+          )}
         </div>
 
         {/* Real Friends */}

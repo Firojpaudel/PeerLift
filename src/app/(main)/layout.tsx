@@ -17,10 +17,10 @@ export default function MainLayout({
         </Link>
         <div className="ml-auto hidden md:flex items-center gap-6 text-sm font-medium">
           <Link href="/dashboard" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Dashboard</Link>
-          <Link href="/explore" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Explore</Link>
-          <Link href="/requests" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Requests</Link>
-          <Link href="/sessions" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Sessions</Link>
-          <Link href="/sessions/chat" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Chat</Link>
+          <Link href="/explore" id="nav-explore-button" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Explore</Link>
+          <Link href="/requests" id="nav-requests-button" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Requests</Link>
+          <Link href="/sessions" id="nav-sessions-button" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Sessions</Link>
+          <Link href="/sessions/chat" id="ai-tutor-sidebar-button" className="text-text-primary hover:text-primary-600 active:scale-95 transition-all">Chat</Link>
           
           <div className="h-6 w-px bg-border mx-2 hidden md:block"></div>
           

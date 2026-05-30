@@ -63,19 +63,16 @@ export function MessageList({
         </div>
       )}
 
-      {isAI && isConfigured && messages.length === 0 && (
-        <div className="flex items-start gap-3 max-w-[85%]">
+      {isAI && messages.length === 0 && (
+        <div className="flex items-start gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-amber-600 flex items-center justify-center text-white shrink-0 mt-1 shadow-sm">
             <Bot size={16} />
           </div>
-          <div className="bg-bg-elevated border border-border text-text-primary p-3.5 rounded-2xl rounded-tl-sm shadow-sm text-[14px] leading-relaxed prose prose-sm max-w-full dark:prose-invert prose-p:text-text-primary prose-strong:text-text-primary prose-headings:text-text-primary prose-a:text-primary-500">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-              components={markdownComponents}
-            >
-              {`Namaste! 🙏 I am **${tutorName}**. I am ready to guide you on **${learningGoal || "your chosen topic"}** at a *${learningDetail}* level. Send me a message whenever you are ready to begin our session!`}
-            </ReactMarkdown>
+          <div className="bg-bg-elevated border border-border text-text-primary p-4 rounded-2xl rounded-tl-sm shadow-sm text-[14px] leading-relaxed max-w-full">
+            <p className="font-bold text-text-primary mb-1">Welcome!</p>
+            <p className="text-text-secondary">
+              I am {tutorName || "Lumina"}, your AI learning companion. What topic or concept would you like to master today?
+            </p>
           </div>
         </div>
       )}

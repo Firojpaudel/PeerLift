@@ -13,7 +13,7 @@ const tracks = [
     icon: <UserCircle className="text-blue-500" size={32} />,
     color: "bg-blue-500/10",
     borderColor: "border-blue-500/20",
-    link: "/settings/profile",
+    link: "/settings?tab=profile",
     steps: ["Add a professional bio", "List at least 1 skill you can teach", "Specify what you're looking to learn"]
   },
   {

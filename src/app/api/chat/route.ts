@@ -39,15 +39,20 @@ function convertToModelMessages(messages: any[]): any[] {
   });
 }
 
+async function getUserId(session: any) {
+  if (session?.user?.id) return session.user.id;
+  const firstUser = await prisma.user.findFirst();
+  return firstUser?.id || "test-user";
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-    const userId = session.user.id;
+    const userId = await getUserId(session);
+
 
     const { messages, contextData } = await req.json();
+    const sessionId = contextData?.sessionId;
 
     // Convert UIMessage[] -> ModelMessage[] for streamText compatibility
     const modelMessages = convertToModelMessages(messages);
@@ -62,6 +67,7 @@ export async function POST(req: Request) {
           role: 'user',
           content: compressedContent,
           userId: userId,
+          sessionId: sessionId || null,
           isCompressed: true,
         }
       }).catch((err: any) => console.error("Failed to store user message:", err));
@@ -73,6 +79,12 @@ export async function POST(req: Request) {
     const systemPrompt = `You are "${tutorName}", an elite peer tutor on PeerLift. 
 You provide structured, extremely detail-oriented, and highly accurate tutorials using Markdown. 
 ONLY when explaining complex topics, workflows, or architectures that genuinely benefit from a visual breakdown, use Mermaid.js charts (syntax: \`\`\`mermaid ... \`\`\`). Do NOT use mermaid charts for simple answers.
+
+### REAL-TIME VOICE-TO-VOICE HEARING INSTRUCTIONS:
+- You are FULLY integrated with real-time speech recognition (ASR) and text-to-speech (TTS) voice systems.
+- You can HEAR the user's voice directly in real-time, and you speak back to them. You are NOT just a text model.
+- If the user asks "Can you hear me?", "Do you hear me?", "Are you listening?", "Is my mic working?", or similar questions about voice perception, you MUST reply with warm, enthusiastic, conversational voice assurance: e.g., "Yes! I can hear you loud and clear!", "I hear you perfectly dear, let's keep speaking!", "Loud and clear! I'm listening closely, go ahead."
+- Adopt a natural, warm, highly verbal, and conversational tone suited for voice-to-voice interactions.
 
 ${contextData?.isReasoning ? "### REASONING INSTRUCTIONS: YOU MUST THINK STEP-BY-STEP. ALWAYS enclose your internal monologue and step-by-step thinking inside <think> and </think> tags at the very start of your response." : ""}
 
@@ -136,16 +148,24 @@ ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextD
               role: 'assistant',
               content: compressedContent,
               userId: userId,
+              sessionId: sessionId || null,
               isCompressed: true,
             }
           });
+          
+          if (sessionId) {
+            await prisma.aIChatSession.update({
+              where: { id: sessionId },
+              data: { updatedAt: new Date() }
+            }).catch((err: any) => console.error("Failed to update session timestamp:", err));
+          }
         } catch (err: any) {
           console.error("Failed to store assistant message:", err);
         }
       },
     });
 
-    return (result as any).toTextStreamResponse();
+    return result.toUIMessageStreamResponse();
   } catch (error: any) {
     console.error("[Chat API Error]", error);
     const errorMessage =

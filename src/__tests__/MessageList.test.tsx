@@ -13,7 +13,7 @@ vi.mock('rehype-raw', () => ({ default: {} }));
 describe('MessageList', () => {
   const mockMessages = [
     { id: '1', role: 'user', content: 'hello', userId: 'user-1' },
-    { id: '2', role: 'assistant', content: 'hi there', role: 'assistant' },
+    { id: '2', role: 'assistant', content: 'hi there' },
   ];
 
   const defaultProps = {

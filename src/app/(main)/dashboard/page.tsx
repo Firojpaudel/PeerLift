@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { LearningAnalytics } from "./LearningAnalytics";
 import { DashboardCalendar } from "./DashboardCalendar";
 import { OnboardingPortal } from "./OnboardingPortal";
+import { DashboardTour } from "@/components/features/tutorial/DashboardTour";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
@@ -82,13 +83,13 @@ export default async function Dashboard() {
   const recentHistory = allSessions.slice(0, 5);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto min-h-screen w-full">
-      <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="p-8 max-w-7xl mx-auto min-h-screen w-full relative">
+      <header id="welcome-hero" className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-display font-extrabold text-text-primary tracking-tight">Good morning, {firstName}.</h1>
           <p className="text-lg text-text-secondary mt-2 font-medium">Here&apos;s what&apos;s happening with your learning journey today.</p>
         </div>
-        <div className="bg-gradient-to-r from-primary-500 to-amber-600 p-4 rounded-2xl text-white shadow-xl flex items-center gap-4 shrink-0">
+        <div id="credit-balance-widget" className="bg-gradient-to-r from-primary-500 to-amber-600 p-4 rounded-2xl text-white shadow-xl flex items-center gap-4 shrink-0">
           <div className="bg-white/20 p-3 rounded-full">
             <Zap className="text-amber-100" size={24} />
           </div>
@@ -115,8 +116,8 @@ export default async function Dashboard() {
           ) : (
             <>
               {/* Quick Actions Bar */}
-              <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Link href="/settings/profile" className="bg-bg-elevated p-6 rounded-2xl border border-border hover:border-primary-400 hover:shadow-[var(--shadow-md)] transition-all flex flex-col items-center justify-center gap-3 group active:scale-[0.98]">
+              <section id="quick-actions-section" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Link href="/settings?tab=profile" className="bg-bg-elevated p-6 rounded-2xl border border-border hover:border-primary-400 hover:shadow-[var(--shadow-md)] transition-all flex flex-col items-center justify-center gap-3 group active:scale-[0.98]">
                   <div className="w-12 h-12 rounded-full bg-primary-500 text-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
                     <PlusCircle size={24} />
                   </div>
@@ -218,7 +219,7 @@ export default async function Dashboard() {
 
         {/* Sidebar */}
         <aside className="lg:col-span-4 flex flex-col gap-6">
-          <div className="bg-bg-elevated p-6 rounded-2xl border border-border shadow-[var(--shadow-sm)]">
+          <div id="lifetime-impact-section" className="bg-bg-elevated p-6 rounded-2xl border border-border shadow-[var(--shadow-sm)]">
             <h3 className="font-display font-bold text-text-primary mb-4 text-xl">Lifetime Impact</h3>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -247,7 +248,7 @@ export default async function Dashboard() {
             </div>
           </div>
 
-          <section>
+          <section id="schedule-calendar-section">
             <h3 className="font-display font-bold text-text-primary mb-4 text-xl flex items-center gap-2">
               <Calendar className="text-secondary-500" size={20} />
               Your Schedule
@@ -297,6 +298,7 @@ export default async function Dashboard() {
           </section>
         </aside>
       </div>
+      <DashboardTour />
     </div>
   )
 }
