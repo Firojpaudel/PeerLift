@@ -35,6 +35,21 @@ const NEPALI_BIOS = [
 
 const LOCATIONS = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Dharan'];
 
+const AVATARS = [
+  'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=150&q=80', // Man
+  'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80', // Woman
+  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80', // Man
+  'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=150&q=80', // Woman
+  'https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?auto=format&fit=crop&w=150&q=80', // Man
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&q=80', // Woman
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80', // Man
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&q=80', // Woman
+  'https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=150&q=80', // Man
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80', // Woman
+  'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=150&q=80', // Man
+  'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=150&q=80', // Woman
+];
+
 async function main() {
   const passwordHash = await bcrypt.hash('password123', 10);
   console.log('--- STARTING PREMIUM NEPALI SEED ---');
@@ -69,7 +84,7 @@ async function main() {
         name,
         passwordHash,
         bio: NEPALI_BIOS[i % NEPALI_BIOS.length],
-        avatarUrl: `https://i.pravatar.cc/150?u=${username}`,
+        avatarUrl: AVATARS[i % AVATARS.length],
         location: LOCATIONS[i % LOCATIONS.length],
         credits: 100,
         skillsOffered: {

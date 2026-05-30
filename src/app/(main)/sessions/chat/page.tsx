@@ -60,9 +60,9 @@ const MermaidChart = ({ chart }: { chart: string }) => {
             fontFamily: 'Inter, system-ui, sans-serif',
           },
           securityLevel: 'loose',
-          flowchart: { 
+          flowchart: {
             useMaxWidth: false, // For zoom/pan
-            htmlLabels: true, 
+            htmlLabels: true,
             curve: 'basis',
             rankSpacing: 50,
             nodeSpacing: 50,
@@ -108,14 +108,14 @@ const MermaidChart = ({ chart }: { chart: string }) => {
           {showRaw ? <Brain size={16} /> : <PlayCircle size={16} />}
         </button>
       </div>
-      
+
       {showRaw ? (
         <div className="p-5 bg-[#121212] font-mono text-[11px] text-amber-500/80 leading-relaxed overflow-auto max-h-[400px]">
           <pre>{chart}</pre>
         </div>
       ) : (
         <div className="relative min-h-[300px]">
-           <div
+          <div
             ref={containerRef}
             className="p-8 flex justify-center items-center overflow-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent active:cursor-grabbing transition-all"
             dangerouslySetInnerHTML={{ __html: svg }}
@@ -168,17 +168,17 @@ const ThoughtBlock = ({ content }: { content: string }) => {
 const markdownComponents = {
   // Override the default <pre> wrapper so Tailwind's typography plugin doesn't add its own box-in-a-box styling
   pre: ({ children }: any) => <div className="not-prose">{children}</div>,
-  code({node, className, children, ...props}: any) {
+  code({ node, className, children, ...props }: any) {
     const match = /language-(\w+)/.exec(className || '');
     const lang = match ? match[1] : '';
     const content = String(children).replace(/\n$/, '');
     const mermaidKeywords = ['graph ', 'graph\n', 'sequenceDiagram', 'pie', 'gantt', 'classDiagram', 'stateDiagram', 'erDiagram', 'journey'];
     const isMermaid = lang === 'mermaid' || mermaidKeywords.some(k => content.startsWith(k));
-    
+
     if (isMermaid) {
       return <MermaidChart chart={content} />;
     }
-    
+
     if (match && !props.inline) {
       return (
         <div className="my-5 rounded-xl overflow-hidden shadow-2xl relative group bg-[#1e1e1e] border border-white/10">
@@ -197,7 +197,7 @@ const markdownComponents = {
         </div>
       );
     }
-    
+
     return (
       <code className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded-md text-primary-600 dark:text-primary-400 text-[13px]" style={{ fontFamily: '"Iosevka", "Iosevka Term", monospace' }} {...props}>
         {children}
@@ -257,24 +257,24 @@ function ChatSessionInner() {
   const recognitionRef = useRef<any>(null);
 
   // --- AI Hook (Stable Standard) ---
-  const { 
-    messages: aiMessages, 
-    input: aiInput, 
-    handleInputChange, 
-    handleSubmit: sendAI, 
-    append, 
-    isLoading: isAILoading, 
+  const {
+    messages: aiMessages,
+    input: aiInput,
+    handleInputChange,
+    handleSubmit: sendAI,
+    append,
+    isLoading: isAILoading,
     setMessages,
     reload
   } = (useChat as any)({
     api: '/api/chat',
     body: {
-      contextData: { 
-        learningGoal, 
-        learningDetail, 
-        tutorName, 
-        isReasoning: isReasoningMode, 
-        documentText: parsedDoc?.text 
+      contextData: {
+        learningGoal,
+        learningDetail,
+        tutorName,
+        isReasoning: isReasoningMode,
+        documentText: parsedDoc?.text
       },
     },
   });
@@ -301,7 +301,7 @@ function ChatSessionInner() {
   // Helper for direct AI message sending
   const sendAIMessage = async (options: { text: string }) => {
     if (!options.text.trim() || isAILoading) return;
-    
+
     try {
       await append({ role: 'user', content: options.text });
     } catch (err) {
@@ -433,8 +433,8 @@ function ChatSessionInner() {
         if (peerId && !isAI) {
           const ids = [sessionUserId, peerId].sort();
           if (ids[0] && ids[1]) {
-             const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
-             pusherClient.unsubscribe(dmChannelName);
+            const dmChannelName = `private-chat-${ids[0]}-${ids[1]}`;
+            pusherClient.unsubscribe(dmChannelName);
           }
         }
       }
@@ -800,8 +800,8 @@ function ChatSessionInner() {
                   </button>
                 </div>
               )}
-              <button 
-                onClick={() => setIsFullscreen(!isFullscreen)} 
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
                 className={`p-2.5 rounded-full transition-all active:scale-95 ${isFullscreen ? 'bg-primary-500 text-white' : 'text-text-muted hover:bg-bg-secondary hover:text-text-primary'}`}
               >
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
