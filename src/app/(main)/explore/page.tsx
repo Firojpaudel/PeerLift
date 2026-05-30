@@ -2,6 +2,8 @@ import { Input } from "@/components/ui/Input"
 import { SkillCard } from "@/components/features/skills/SkillCard"
 import prisma from "@/lib/prisma"
 import { Search } from "lucide-react"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -12,6 +14,8 @@ export default async function ExplorePage({
   searchParams: { q?: string }
 }) {
   const query = searchParams.q || ""
+  const session = await getServerSession(authOptions)
+  const currentUserId = session?.user?.id
 
   // Fetch users with their skills dynamically, applying simple search filter
   const users = await prisma.user.findMany({
@@ -42,6 +46,7 @@ export default async function ExplorePage({
       }
     },
     where: {
+      id: currentUserId ? { not: currentUserId } : undefined,
       OR: [
         { skillsOffered: { some: {} } },
         { skillsWanted: { some: {} } },
