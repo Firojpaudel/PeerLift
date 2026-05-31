@@ -45,10 +45,10 @@ export default async function ProfilePage({
           <div className="relative h-32 w-32 rounded-full border-[6px] border-white bg-neutral-200 overflow-hidden ring-1 ring-border shadow-xl">
             {/* Avatar placeholder */}
             {user.avatarUrl ? (
-              <Image src={user.avatarUrl} alt={user.name} fill className="object-cover" sizes="128px" />
+              <Image src={user.avatarUrl} alt={user.name || "User"} fill className="object-cover" sizes="128px" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-4xl font-display font-extrabold text-text-muted bg-neutral-50 shadow-inner">
-                {user.name.charAt(0).toUpperCase()}
+                {(user.name || "User").charAt(0).toUpperCase()}
               </div>
             )}
           </div>
@@ -59,7 +59,7 @@ export default async function ProfilePage({
         <div className="flex flex-col md:flex-row md:justify-between items-start gap-6">
           <div className="flex-1 space-y-3">
             <div className="space-y-1">
-              <h1 className="text-[32px] font-display font-extrabold text-text-primary tracking-tight leading-tight">{user.name}</h1>
+              <h1 className="text-[32px] font-display font-extrabold text-text-primary tracking-tight leading-tight">{user.name || "User"}</h1>
               <p className="text-text-muted font-medium">@{user.username}</p>
             </div>
             

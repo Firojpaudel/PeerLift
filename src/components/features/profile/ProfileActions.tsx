@@ -111,7 +111,7 @@ export function ProfileActions({
         <Button onClick={handleOpen} variant="primary" className="bg-amber-500 hover:bg-amber-600 rounded-xl px-5 text-[15px] shadow-[var(--shadow-sm)] font-bold text-white transition-all h-[42px]">
           Send Request
         </Button>
-        <Link href={`/sessions/chat?peerId=${user.id}&peerName=${encodeURIComponent(user.name)}`} className="inline-flex items-center justify-center font-semibold text-text-primary hover:bg-bg-secondary rounded-xl text-[15px] px-5 h-[42px] transition-colors">
+        <Link href={`/sessions/chat?peerId=${user.id}&peerName=${encodeURIComponent(user.name || "User")}`} className="inline-flex items-center justify-center font-semibold text-text-primary hover:bg-bg-secondary rounded-xl text-[15px] px-5 h-[42px] transition-colors">
             Message
           
         </Link>
