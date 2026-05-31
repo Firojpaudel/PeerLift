@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
@@ -20,7 +22,7 @@ export async function GET() {
         bio: true,
         avatarUrl: true,
         credits: true,
-      }
+      },
     });
 
     if (!user) {
@@ -56,7 +58,7 @@ export async function POST(req: Request) {
         name: true,
         bio: true,
         avatarUrl: true,
-      }
+      },
     });
 
     return NextResponse.json(updatedUser);

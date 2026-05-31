@@ -5,10 +5,12 @@ import { authOptions } from '@/lib/auth';
 import { pusherServer } from '@/lib/pusher';
 import { compressString, decompressString } from '@/lib/compression';
 
-async function getUserId(session: any) {
+export const dynamic = 'force-dynamic';
+
+async function getUserId(session: { user?: { id?: string } } | null) {
   if (session?.user?.id) return session.user.id;
   const firstUser = await prisma.user.findFirst();
-  return firstUser?.id || "test-user";
+  return firstUser?.id || 'test-user';
 }
 
 export async function GET(request: Request) {
@@ -42,8 +44,8 @@ export async function GET(request: Request) {
         where: {
           OR: [
             { userId: userId, receiverId: peerId },
-            { userId: peerId, receiverId: userId }
-          ]
+            { userId: peerId, receiverId: userId },
+          ],
         },
         orderBy: { createdAt: 'asc' },
       });
@@ -58,7 +60,7 @@ export async function GET(request: Request) {
           try {
             return { ...msg, content: await decompressString(msg.content) };
           } catch (e) {
-            console.error("Decompression failed for message", msg.id, e);
+            console.error('Decompression failed for message', msg.id, e);
             return msg;
           }
         }
@@ -94,23 +96,23 @@ export async function POST(request: Request) {
         content: compressedContent,
         role: 'user', // Required field
         isCompressed: true,
-      }
+      },
     });
 
     // Trigger Pusher event for the private channel
     if (pusherServer) {
-        // Construct the same stable channel name logic client uses:
-        const ids = [userId, receiverId].sort();
-        const channelName = `private-chat-${ids[0]}-${ids[1]}`;
-        
-        await pusherServer.trigger(channelName, 'new-message', {
-          id: message.id,
-          content: content, // Send raw content via socket for instant display
-          userId: message.userId,
-          receiverId: message.receiverId,
-          role: message.role,
-          createdAt: message.createdAt
-        });
+      // Construct the same stable channel name logic client uses:
+      const ids = [userId, receiverId].sort();
+      const channelName = `private-chat-${ids[0]}-${ids[1]}`;
+
+      await pusherServer.trigger(channelName, 'new-message', {
+        id: message.id,
+        content: content, // Send raw content via socket for instant display
+        userId: message.userId,
+        receiverId: message.receiverId,
+        role: message.role,
+        createdAt: message.createdAt,
+      });
     }
 
     return NextResponse.json(message);

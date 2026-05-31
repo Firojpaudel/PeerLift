@@ -1,15 +1,17 @@
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-async function getUserId(session: any) {
+export const dynamic = 'force-dynamic';
+
+async function getUserId(session: { user?: { id?: string } } | null) {
   if (session?.user?.id) return session.user.id;
   const firstUser = await prisma.user.findFirst();
-  return firstUser?.id || "test-user";
+  return firstUser?.id || 'test-user';
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     const userId = await getUserId(session);
@@ -19,14 +21,14 @@ export async function GET(request: Request) {
         userId: userId,
       },
       orderBy: {
-        updatedAt: "desc",
+        updatedAt: 'desc',
       },
     });
 
     return NextResponse.json(sessions);
   } catch (error) {
-    console.error("Error fetching AI sessions:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('Error fetching AI sessions:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -39,16 +41,16 @@ export async function POST(request: Request) {
     const { title, learningGoal, skillLevel, tutorName, tutorGender, isReasoning } = body;
 
     if (!learningGoal) {
-      return NextResponse.json({ error: "Missing learningGoal" }, { status: 400 });
+      return NextResponse.json({ error: 'Missing learningGoal' }, { status: 400 });
     }
 
     const newSession = await prisma.aIChatSession.create({
       data: {
-        title: title || learningGoal || "New Tutor Session",
+        title: title || learningGoal || 'New Tutor Session',
         learningGoal,
-        skillLevel: skillLevel || "Intermediate",
-        tutorName: tutorName || "Lumina",
-        tutorGender: tutorGender || "female",
+        skillLevel: skillLevel || 'Intermediate',
+        tutorName: tutorName || 'Lumina',
+        tutorGender: tutorGender || 'female',
         isReasoning: !!isReasoning,
         userId: userId,
       },
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newSession);
   } catch (error) {
-    console.error("Error creating AI session:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('Error creating AI session:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

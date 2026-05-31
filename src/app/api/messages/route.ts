@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma';
 import { pusherServer } from '@/lib/pusher';
 import { encryptMessage, decryptMessage } from '@/lib/encryption';
 
+export const dynamic = 'force-dynamic';
+
 // Determines a deterministic channel name for two users
 function getDMChannel(user1: string, user2: string) {
   const sorted = [user1, user2].sort();
@@ -28,17 +30,18 @@ export async function POST(req: Request) {
 
     // Handle Read/Delivered Receipts
     if (type === 'receipt') {
-      if (!targetMessageId) return NextResponse.json({ error: 'Missing targetMessageId' }, { status: 400 });
-      
+      if (!targetMessageId)
+        return NextResponse.json({ error: 'Missing targetMessageId' }, { status: 400 });
+
       const updated = await prisma.message.update({
         where: { id: targetMessageId },
-        data: { status: 'READ' }
+        data: { status: 'READ' },
       });
 
       await pusherServer.trigger(channelName, 'receipt', {
         messageId: targetMessageId,
         status: 'READ',
-        readerId: session.user.id
+        readerId: session.user.id,
       });
       return NextResponse.json({ success: true, updated });
     }
@@ -59,22 +62,22 @@ export async function POST(req: Request) {
       },
     });
 
-    // Send the PLAIN text over Pusher. Since it's a private channel and we are 
-    // terminating SSL, it's secure in transit. For true zero-knowledge, the client 
-    // would encrypt before POST, but we are using Server-Side Application Encryption 
+    // Send the PLAIN text over Pusher. Since it's a private channel and we are
+    // terminating SSL, it's secure in transit. For true zero-knowledge, the client
+    // would encrypt before POST, but we are using Server-Side Application Encryption
     // to preserve history mapping.
     await pusherServer.trigger(channelName, 'new-message', {
       id: message.id,
-      content, 
+      content,
       senderId: session.user.id,
       createdAt: message.createdAt,
-      status: 'DELIVERED' // Predict optimistic delivery to the pusher queue
+      status: 'DELIVERED', // Predict optimistic delivery to the pusher queue
     });
 
     // Mark as delivered in DB because pusher accepted it
     await prisma.message.update({
       where: { id: message.id },
-      data: { status: 'DELIVERED' }
+      data: { status: 'DELIVERED' },
     });
 
     return NextResponse.json({ ...message, content }, { status: 201 });
@@ -109,7 +112,7 @@ export async function GET(req: Request) {
     });
 
     // Decrypt messages before sending to client
-    const decryptedMessages = messages.map(msg => ({
+    const decryptedMessages = messages.map((msg) => ({
       ...msg,
       content: decryptMessage(msg.content),
     }));

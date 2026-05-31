@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { SkillLevel } from '@prisma/client';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
@@ -13,7 +15,7 @@ export async function GET() {
 
     // Get all pre-defined skills available in the system
     const allSkills = await prisma.skill.findMany({
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
 
     // Get user's current offering and wanting skills
@@ -21,18 +23,18 @@ export async function GET() {
       where: { id: session.user.id },
       select: {
         skillsOffered: {
-          include: { skill: true }
+          include: { skill: true },
         },
         skillsWanted: {
-          include: { skill: true }
-        }
-      }
+          include: { skill: true },
+        },
+      },
     });
 
     return NextResponse.json({
       allSkills,
       skillsOffered: userSkills?.skillsOffered || [],
-      skillsWanted: userSkills?.skillsWanted || []
+      skillsWanted: userSkills?.skillsWanted || [],
     });
   } catch (error) {
     console.error('Fetch user skills error:', error);
@@ -58,21 +60,24 @@ export async function POST(req: Request) {
     const existing = await prisma.userSkill.findFirst({
       where: {
         skillId,
-        OR: [
-          { offeringUserId: userId },
-          { wantingUserId: userId }
-        ]
-      }
+        OR: [{ offeringUserId: userId }, { wantingUserId: userId }],
+      },
     });
 
     if (existing) {
-      return NextResponse.json({ error: "Skill already added to your profile." }, { status: 400 });
+      return NextResponse.json({ error: 'Skill already added to your profile.' }, { status: 400 });
     }
 
-    const data: any = {
+    const data: {
+      skillId: string;
+      level: SkillLevel;
+      note: string;
+      offeringUserId?: string;
+      wantingUserId?: string;
+    } = {
       skillId,
       level: level || SkillLevel.INTERMEDIATE,
-      note: note || ''
+      note: note || '',
     };
 
     if (type === 'teaching') {
@@ -85,7 +90,7 @@ export async function POST(req: Request) {
 
     const newUserSkill = await prisma.userSkill.create({
       data,
-      include: { skill: true }
+      include: { skill: true },
     });
 
     return NextResponse.json(newUserSkill);
@@ -111,19 +116,22 @@ export async function DELETE(req: Request) {
 
     // Verify ownership before deleting
     const userSkill = await prisma.userSkill.findUnique({
-      where: { id }
+      where: { id },
     });
 
     if (!userSkill) {
       return new NextResponse('Not found', { status: 404 });
     }
 
-    if (userSkill.offeringUserId !== session.user.id && userSkill.wantingUserId !== session.user.id) {
+    if (
+      userSkill.offeringUserId !== session.user.id &&
+      userSkill.wantingUserId !== session.user.id
+    ) {
       return new NextResponse('Forbidden', { status: 403 });
     }
 
     await prisma.userSkill.delete({
-      where: { id }
+      where: { id },
     });
 
     return NextResponse.json({ success: true });
