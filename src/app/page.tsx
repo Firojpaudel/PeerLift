@@ -7,8 +7,18 @@ export default function Home() {
     <div className="min-h-screen bg-bg-primary text-text-primary overflow-x-hidden flex flex-col items-center">
       {/* Navbar for Landing Page */}
       <nav className="w-full h-20 flex items-center justify-between px-6 md:px-12 max-w-7xl mx-auto z-50 relative">
-        <div className="font-display font-extrabold text-2xl tracking-tight text-primary-600">
-          PeerLift
+        <div className="flex items-center gap-0 font-display font-extrabold text-2xl tracking-tight text-primary-600">
+          <img
+            src="/icon-light.png"
+            alt="PeerLift Logo"
+            className="w-8 h-8 rounded-lg block dark:hidden object-contain"
+          />
+          <img
+            src="/icon-dark.png"
+            alt="PeerLift Logo"
+            className="w-8 h-8 rounded-lg hidden dark:block object-contain"
+          />
+          <span className="-ml-1.5">eerLift</span>
         </div>
         <div className="flex items-center gap-4">
           <ThemeToggle />
@@ -35,8 +45,8 @@ export default function Home() {
             </h1>
 
             <p className="text-xl text-text-secondary max-w-[500px] leading-relaxed">
-              Eliminate financial barriers to learning through peer
-              collaboration. Exchange what you know for what you want to learn.
+              Eliminate financial barriers to learning through peer collaboration. Exchange what you
+              know for what you want to learn.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-6 items-center justify-center lg:justify-start w-full pt-4">
@@ -84,8 +94,8 @@ export default function Home() {
               How it works
             </h2>
             <p className="text-text-secondary text-lg">
-              Join a community of lifelong learners and trade what you know for
-              what you want to learn, at zero cost.
+              Join a community of lifelong learners and trade what you know for what you want to
+              learn, at zero cost.
             </p>
           </div>
 
@@ -98,12 +108,10 @@ export default function Home() {
               <div className="w-20 h-20 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl font-display font-bold shadow-[var(--shadow-glow-primary)] mb-6">
                 1
               </div>
-              <h3 className="text-2xl font-display font-bold mb-3">
-                List your skills
-              </h3>
+              <h3 className="text-2xl font-display font-bold mb-3">List your skills</h3>
               <p className="text-text-secondary leading-relaxed">
-                Create a profile highlighting the skills you can teach and the
-                ones you&apos;re looking to learn.
+                Create a profile highlighting the skills you can teach and the ones you&apos;re
+                looking to learn.
               </p>
             </div>
 
@@ -112,12 +120,10 @@ export default function Home() {
               <div className="w-20 h-20 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl font-display font-bold shadow-[var(--shadow-glow-primary)] mb-6">
                 2
               </div>
-              <h3 className="text-2xl font-display font-bold mb-3">
-                Get matched
-              </h3>
+              <h3 className="text-2xl font-display font-bold mb-3">Get matched</h3>
               <p className="text-text-secondary leading-relaxed">
-                Our algorithm pairs you with community members who want what you
-                offer and offer what you want.
+                Our algorithm pairs you with community members who want what you offer and offer
+                what you want.
               </p>
             </div>
 
@@ -126,18 +132,14 @@ export default function Home() {
               <div className="w-20 h-20 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl font-display font-bold shadow-[var(--shadow-glow-primary)] mb-6">
                 3
               </div>
-              <h3 className="text-2xl font-display font-bold mb-3">
-                Exchange & grow
-              </h3>
+              <h3 className="text-2xl font-display font-bold mb-3">Exchange & grow</h3>
               <p className="text-text-secondary leading-relaxed">
-                Schedule a video session, trade knowledge, and help each other
-                reach your goals.
+                Schedule a video session, trade knowledge, and help each other reach your goals.
               </p>
             </div>
           </div>
         </div>
       </section>
-
     </div>
   );
 }
