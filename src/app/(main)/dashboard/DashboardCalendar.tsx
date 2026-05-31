@@ -15,14 +15,19 @@ export function DashboardCalendar({ sessions }: DashboardCalendarProps) {
 
   // Map DB sessions to local format
   const formattedSessions = useMemo(() => {
-    return sessions.map(s => ({
-      id: s.id,
-      date: new Date(s.scheduledAt),
-      title: s.role === 'mentor' ? `Teaching ${s.request.requestedSkill.name}` : `Learning ${s.request.offeredSkill.name}`,
-      duration: s.duration,
-      link: s.meetLink,
-      partner: s.role === 'mentor' ? s.learner.name : s.mentor.name
-    }));
+    return sessions.map(s => {
+      const partnerName = s.role === 'mentor' ? (s.learner?.name || 'Peer') : (s.mentor?.name || 'Peer');
+      const skillName = s.request?.requestedSkill?.skill?.name || s.request?.offeredSkill?.skill?.name || 'Skill Session';
+      const title = s.role === 'mentor' ? `Teaching ${skillName}` : `Learning ${skillName}`;
+      return {
+        id: s.id,
+        date: new Date(s.scheduledAt),
+        title,
+        duration: s.duration,
+        link: s.meetingLink,
+        partner: partnerName
+      };
+    });
   }, [sessions]);
 
   // Find sessions for selected date

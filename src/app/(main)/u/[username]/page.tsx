@@ -88,8 +88,8 @@ export default async function ProfilePage({
             <div className="flex flex-wrap gap-2.5">
               {user.skillsOffered.length === 0 && <p className="text-text-muted text-sm italic">Not offering any skills yet.</p>}
               {user.skillsOffered.map((us) => (
-                <Tag key={us.id} category={us.skill.category as SkillCategory} level={us.level}>
-                   {us.skill.name}
+                <Tag key={us.id} category={(us.skill?.category || "OTHER") as SkillCategory} level={us.level}>
+                   {us.skill?.name || "Unknown Skill"}
                 </Tag>
               ))}
             </div>
@@ -101,8 +101,8 @@ export default async function ProfilePage({
             <div className="flex flex-wrap gap-2.5">
               {user.skillsWanted.length === 0 && <p className="text-text-muted text-sm italic">Not seeking any skills yet.</p>}
               {user.skillsWanted.map((us) => (
-                <Tag key={us.id} category={us.skill.category as SkillCategory}>
-                   {us.skill.name}
+                <Tag key={us.id} category={(us.skill?.category || "OTHER") as SkillCategory}>
+                   {us.skill?.name || "Unknown Skill"}
                 </Tag>
               ))}
             </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Bell, Star, Menu, X, LogOut, User, Settings, MessageSquare, Shield } from "lucide-react";
+import { Bell, Star, Menu, X, LogOut, User, Settings } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { NavbarUser } from "@/components/layout/NavbarUser";
@@ -13,6 +13,23 @@ export function Navbar() {
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const [credits, setCredits] = useState<number | null>(null);
+
+  // Fetch actual user credits dynamically
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetch("/api/user/profile")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && typeof data.credits === "number") {
+            setCredits(data.credits);
+          }
+        })
+        .catch((err) => console.error("Error fetching navbar profile:", err));
+    } else {
+      setCredits(null);
+    }
+  }, [session?.user?.id, pathname]);
 
   // Prevent scroll when mobile menu is open
   useEffect(() => {
@@ -80,7 +97,7 @@ export function Navbar() {
           
           <div className="flex items-center gap-1.5 text-primary-600 bg-primary-50 px-3 py-1.5 rounded-full text-xs font-bold font-mono hover:bg-primary-100 transition-all cursor-default">
             <Star size={14} fill="currentColor" />
-            <span>100 Credits</span>
+            <span>{credits !== null ? `${credits} Credits` : "Credits"}</span>
           </div>
 
           <div className="h-6 w-px bg-border mx-2 hidden md:block"></div>
@@ -169,7 +186,9 @@ export function Navbar() {
             </div>
             <div>
               <p className="text-white/70 text-[10px] font-bold uppercase tracking-wider">Your Balance</p>
-              <p className="text-lg font-display font-extrabold text-white">100 Credits</p>
+              <p className="text-lg font-display font-extrabold text-white">
+                {credits !== null ? `${credits} Credits` : "Credits"}
+              </p>
             </div>
           </div>
           <Link href="/explore" onClick={() => setIsOpen(false)}>

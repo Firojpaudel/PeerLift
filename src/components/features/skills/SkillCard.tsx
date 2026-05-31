@@ -63,8 +63,8 @@ export function SkillCard({ user }: SkillCardProps) {
                         {user.skillsOffered.length > 0 ? (
                             user.skillsOffered.map((usLine) => (
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                <Tag key={usLine.id} category={usLine.skill.category as any} level={usLine.level}>
-                                    {usLine.skill.name}
+                                <Tag key={usLine.id} category={(usLine.skill?.category || "OTHER") as any} level={usLine.level}>
+                                    {usLine.skill?.name || "Unknown Skill"}
                                 </Tag>
                             ))
                         ) : (
@@ -82,8 +82,8 @@ export function SkillCard({ user }: SkillCardProps) {
                         {user.skillsWanted.length > 0 ? (
                             user.skillsWanted.map((usLine) => (
                                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                <Tag key={usLine.id} category={usLine.skill.category as any} className="opacity-80 border-dashed border">
-                                    {usLine.skill.name}
+                                <Tag key={usLine.id} category={(usLine.skill?.category || "OTHER") as any} className="opacity-80 border-dashed border">
+                                    {usLine.skill?.name || "Unknown Skill"}
                                 </Tag>
                             ))
                         ) : (

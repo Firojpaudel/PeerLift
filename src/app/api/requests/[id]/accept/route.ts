@@ -37,6 +37,16 @@ export async function POST(
       return NextResponse.json({ error: 'Request is no longer pending' }, { status: 400 });
     }
 
+    // Verify that the sender (learner) has enough credits (minimum 30)
+    const sender = await prisma.user.findUnique({
+      where: { id: request.senderId },
+      select: { credits: true }
+    });
+
+    if (!sender || sender.credits < 30) {
+      return NextResponse.json({ error: 'Sender has insufficient credits (minimum 30 required).' }, { status: 400 });
+    }
+
     // 1. Generate Google Meet Link
     // For now, we use a generic time or a fallback if startTime is not provided
     // In a real app, you'd have a proposed time in the request
@@ -53,7 +63,7 @@ export async function POST(
       attendeeEmails
     );
 
-    // 2. Update Request & Create Session
+    // 2. Update Request, Create Session & Adjust Credits
     const [updatedRequest, newSession] = await prisma.$transaction([
       prisma.exchangeRequest.update({
         where: { id: requestId },
@@ -71,6 +81,14 @@ export async function POST(
           status: 'SCHEDULED',
         },
       }),
+      prisma.user.update({
+        where: { id: request.senderId },
+        data: { credits: { decrement: 30 } }
+      }),
+      prisma.user.update({
+        where: { id: request.receiverId },
+        data: { credits: { increment: 30 } }
+      })
     ]);
 
     return NextResponse.json({ 

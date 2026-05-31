@@ -166,7 +166,7 @@ export function ProfileActions({
                 >
                   <option value="" disabled>Select a skill...</option>
                   {allSkillsTheyTeach.map(s => (
-                    <option key={s.id} value={s.id}>{s.skill.name}</option>
+                    <option key={s.id} value={s.id}>{s.skill?.name || "Unknown Skill"}</option>
                   ))}
                 </select>
               </div>
@@ -193,12 +193,12 @@ export function ProfileActions({
                     <option value="" disabled>Select one of your skills to teach...</option>
                     {skillsICanTeach.length > 0 ? (
                       <optgroup label="Skills they want to learn">
-                        {skillsICanTeach.map(s => <option key={s.id} value={s.id}>{s.skill.name}</option>)}
+                        {skillsICanTeach.map(s => <option key={s.id} value={s.id}>{s.skill?.name || "Unknown Skill"}</option>)}
                       </optgroup>
                     ) : null}
                     <optgroup label="Other skills you teach">
                       {allSkillsITeach.filter(s => !skillsICanTeach.find(x => x.id === s.id)).map(s => (
-                        <option key={s.id} value={s.id}>{s.skill.name}</option>
+                        <option key={s.id} value={s.id}>{s.skill?.name || "Unknown Skill"}</option>
                       ))}
                     </optgroup>
                   </select>
@@ -256,7 +256,7 @@ export function ProfileActions({
                 >
                   <option value="" disabled>Select one of your skills...</option>
                   {allSkillsITeach.map(s => (
-                    <option key={s.id} value={s.id}>{s.skill.name}</option>
+                    <option key={s.id} value={s.id}>{s.skill?.name || "Unknown Skill"}</option>
                   ))}
                 </select>
               </div>
@@ -282,7 +282,7 @@ export function ProfileActions({
                   >
                     <option value="" disabled>Select a skill they teach...</option>
                     {allSkillsTheyTeach.map(s => (
-                      <option key={s.id} value={s.id}>{s.skill.name}</option>
+                      <option key={s.id} value={s.id}>{s.skill?.name || "Unknown Skill"}</option>
                     ))}
                   </select>
                 )}

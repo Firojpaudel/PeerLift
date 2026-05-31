@@ -204,7 +204,7 @@ export default async function Dashboard() {
                         </div>
                         <div className="text-right">
                           <span className={`font-bold ${s.role === 'mentor' ? 'text-green-600' : 'text-amber-600'}`}>
-                            {s.role === 'mentor' ? '+10' : '-10'} Credits
+                            {s.role === 'mentor' ? '+30' : '-30'} Credits
                           </span>
                           <p className="text-xs text-text-muted tracking-tight">{new Date(s.scheduledAt).toLocaleDateString()}</p>
                         </div>
@@ -271,7 +271,7 @@ export default async function Dashboard() {
                   <div className="flex flex-wrap gap-2">
                     {skillsOffered.map((us: any) => (
                       <span key={us.id} className="bg-primary-50 text-primary-700 border border-primary-200 px-3 py-1 text-sm rounded-full font-mono font-medium">
-                        {us.skill.name}
+                        {us.skill?.name || "Unknown Skill"}
                       </span>
                     ))}
                   </div>
@@ -284,7 +284,7 @@ export default async function Dashboard() {
                   <div className="flex flex-wrap gap-2">
                     {skillsWanted.map((us: any) => (
                       <span key={us.id} className="bg-bg-secondary text-text-secondary border border-border-strong px-3 py-1 text-sm rounded-full font-mono border-dashed">
-                        {us.skill.name}
+                        {us.skill?.name || "Unknown Skill"}
                       </span>
                     ))}
                   </div>

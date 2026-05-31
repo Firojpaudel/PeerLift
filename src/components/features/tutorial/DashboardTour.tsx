@@ -21,7 +21,7 @@ const tourSteps: TourStep[] = [
   {
     targetId: "credit-balance-widget",
     title: "Your Credit Economy",
-    description: "Every user starts with a credits balance. When you complete a session learning a skill from a peer, you spend 10 credits. When you teach a skill to a peer, you earn 10 credits.",
+    description: "Every user starts with a credits balance. When you complete a session learning a skill from a peer, you spend 30 credits. When you teach a skill to a peer, you earn 30 credits.",
     position: "left"
   },
   {
