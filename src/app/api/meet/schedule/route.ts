@@ -27,7 +27,17 @@ export async function POST(req: Request) {
     const start = startTime ? new Date(startTime) : new Date(Date.now() + 5 * 60000); // default to 5 mins from now
     const meetSummary = summary || `Peer Session with ${session.user.name}`;
 
-    const meetLink = await createGoogleMeetLink(meetSummary, start);
+    // Look up sender and receiver emails to invite them to the Google Calendar event
+    const [sender, receiver] = await Promise.all([
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } }),
+      prisma.user.findUnique({ where: { id: receiverId }, select: { email: true } })
+    ]);
+
+    const attendeeEmails: string[] = [];
+    if (sender?.email) attendeeEmails.push(sender.email);
+    if (receiver?.email) attendeeEmails.push(receiver.email);
+
+    const meetLink = await createGoogleMeetLink(meetSummary, start, 60, attendeeEmails);
 
     if (!meetLink) {
       return NextResponse.json({ error: 'Failed to generate Google Meet link' }, { status: 500 });

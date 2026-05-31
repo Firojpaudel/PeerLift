@@ -41,9 +41,16 @@ export async function POST(
     // For now, we use a generic time or a fallback if startTime is not provided
     // In a real app, you'd have a proposed time in the request
     const meetingSummary = `PeerLift: ${request.sender.name} & ${request.receiver.name}`;
+
+    const attendeeEmails: string[] = [];
+    if (request.sender.email) attendeeEmails.push(request.sender.email);
+    if (request.receiver.email) attendeeEmails.push(request.receiver.email);
+
     const meetLink = await createGoogleMeetLink(
       meetingSummary,
-      new Date(Date.now() + 86400000) // Tomorrow
+      new Date(Date.now() + 86400000), // Tomorrow
+      60,
+      attendeeEmails
     );
 
     // 2. Update Request & Create Session

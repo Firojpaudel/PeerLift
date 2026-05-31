@@ -1,5 +1,4 @@
 import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
 
 /**
  * Creates a Google Calendar event with a Google Meet link.
@@ -8,7 +7,8 @@ import { OAuth2Client } from 'google-auth-library';
 export async function createGoogleMeetLink(
   summary: string,
   startTime: Date,
-  durationMinutes: number = 60
+  durationMinutes: number = 60,
+  attendeeEmails: string[] = []
 ): Promise<string | null> {
   try {
     const oauth2Client = new google.auth.OAuth2(
@@ -26,7 +26,7 @@ export async function createGoogleMeetLink(
 
     const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
 
-    const event = {
+    const event: google.calendar_v3.Schema$Event = {
       summary: summary,
       description: 'Peer tutoring session scheduled via PeerLift',
       start: {
@@ -45,10 +45,15 @@ export async function createGoogleMeetLink(
       },
     };
 
+    if (attendeeEmails.length > 0) {
+      event.attendees = attendeeEmails.map(email => ({ email }));
+    }
+
     const response = await calendar.events.insert({
       calendarId: 'primary',
       requestBody: event,
       conferenceDataVersion: 1,
+      sendUpdates: 'all', // Notify attendees via email and automatically populate their calendars
     });
 
     return response.data.hangoutLink || null;
