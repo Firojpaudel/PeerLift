@@ -139,14 +139,29 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
 
       if (element) {
         const rect = element.getBoundingClientRect();
-        setStepPosition({
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height
+        setStepPosition((prev) => {
+          if (
+            prev.top === rect.top &&
+            prev.left === rect.left &&
+            prev.width === rect.width &&
+            prev.height === rect.height
+          ) {
+            return prev;
+          }
+          return {
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height
+          };
         });
       } else {
-        setStepPosition({ top: 0, left: 0, width: 0, height: 0 });
+        setStepPosition((prev) => {
+          if (prev.top === 0 && prev.left === 0 && prev.width === 0 && prev.height === 0) {
+            return prev;
+          }
+          return { top: 0, left: 0, width: 0, height: 0 };
+        });
       }
     };
 
@@ -373,7 +388,7 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
   return (
     <div className="fixed inset-0 z-[9995] pointer-events-none">
       <div 
-        className="fixed inset-0 bg-black/60 pointer-events-auto backdrop-blur-[4px] transition-all duration-300" 
+        className="fixed inset-0 bg-black/60 pointer-events-auto backdrop-blur-[4px] transition-opacity duration-300" 
         style={overlayStyle}
       />
 
