@@ -221,15 +221,15 @@ export function SettingsClient() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 max-w-4xl mx-auto w-full">
-      {/* Sidebar Navigation */}
-      <aside className="col-span-1 flex flex-col gap-1">
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 max-w-4xl mx-auto w-full px-4 py-6 md:py-8">
+      {/* Sidebar Navigation (Horizontal scroll on mobile, vertical sticky on desktop) */}
+      <aside className="col-span-1 flex flex-row lg:flex-col gap-1.5 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 -mx-4 px-4 lg:mx-0 lg:px-0 scrollbar-none shrink-0 lg:sticky lg:top-20 h-fit">
         <button
           onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors text-left ${
+          className={`flex items-center gap-3 px-4 py-2.5 lg:py-3 text-sm font-semibold rounded-xl transition-all text-left shrink-0 active:scale-97 ${
             activeTab === 'profile'
-              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm'
-              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent'
+              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm dark:bg-primary-500/10 dark:border-primary-500/20'
+              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent hover:border-border'
           }`}
         >
           <User size={18} />
@@ -237,10 +237,10 @@ export function SettingsClient() {
         </button>
         <button
           onClick={() => setActiveTab('security')}
-          className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors text-left ${
+          className={`flex items-center gap-3 px-4 py-2.5 lg:py-3 text-sm font-semibold rounded-xl transition-all text-left shrink-0 active:scale-97 ${
             activeTab === 'security'
-              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm'
-              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent'
+              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm dark:bg-primary-500/10 dark:border-primary-500/20'
+              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent hover:border-border'
           }`}
         >
           <Shield size={18} />
@@ -248,10 +248,10 @@ export function SettingsClient() {
         </button>
         <button
           onClick={() => setActiveTab('notifications')}
-          className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors text-left ${
+          className={`flex items-center gap-3 px-4 py-2.5 lg:py-3 text-sm font-semibold rounded-xl transition-all text-left shrink-0 active:scale-97 ${
             activeTab === 'notifications'
-              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm'
-              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent'
+              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm dark:bg-primary-500/10 dark:border-primary-500/20'
+              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent hover:border-border'
           }`}
         >
           <Bell size={18} />
@@ -259,10 +259,10 @@ export function SettingsClient() {
         </button>
         <button
           onClick={() => setActiveTab('preferences')}
-          className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-colors text-left ${
+          className={`flex items-center gap-3 px-4 py-2.5 lg:py-3 text-sm font-semibold rounded-xl transition-all text-left shrink-0 active:scale-97 ${
             activeTab === 'preferences'
-              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm'
-              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent'
+              ? 'bg-bg-elevated text-primary-600 border border-border shadow-sm dark:bg-primary-500/10 dark:border-primary-500/20'
+              : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary border border-transparent hover:border-border'
           }`}
         >
           <Monitor size={18} />

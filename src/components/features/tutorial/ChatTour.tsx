@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, X, Lightbulb } from "lucide-react";
 
@@ -18,6 +18,7 @@ interface ChatTourProps {
 
 export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
   const [currentStep, setCurrentStep] = useState(-1); // -1 means inactive
+  const cardRef = useRef<HTMLDivElement>(null);
   const [stepPosition, setStepPosition] = useState({ top: 0, left: 0, width: 0, height: 0 });
 
   const tourSteps = React.useMemo(() => {
@@ -96,12 +97,36 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
 
   // Smoothly scroll targeted element into view when step changes
   useEffect(() => {
-    if (currentStep < 0 || currentStep >= tourSteps.length) return;
-    const step = tourSteps[currentStep];
-    const element = document.getElementById(step.targetId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (currentStep < 0 || currentStep >= tourSteps.length) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("hideChatSidebar"));
+      }
+      return;
     }
+    const step = tourSteps[currentStep];
+    
+    // Auto-reveal chat sidebar drawer if target is hidden inside it on mobile
+    const isSidebarTarget = [
+      "chat-sidebar", 
+      "chat-create-session-button"
+    ].includes(step.targetId);
+
+    if (typeof window !== "undefined") {
+      if (isSidebarTarget && window.innerWidth < 768) {
+        window.dispatchEvent(new CustomEvent("showChatSidebar"));
+      } else {
+        window.dispatchEvent(new CustomEvent("hideChatSidebar"));
+      }
+    }
+
+    const scrollTimer = setTimeout(() => {
+      const element = document.getElementById(step.targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+
+    return () => clearTimeout(scrollTimer);
   }, [currentStep, tourSteps]);
 
   // Recalculate target element positions
@@ -112,7 +137,7 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
       const step = tourSteps[currentStep];
       const element = document.getElementById(step.targetId);
 
-      if (element && element.offsetParent !== null) {
+      if (element) {
         const rect = element.getBoundingClientRect();
         setStepPosition({
           top: rect.top,
@@ -129,7 +154,7 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
     window.addEventListener("resize", calculatePosition);
     window.addEventListener("scroll", calculatePosition);
 
-    const interval = setInterval(calculatePosition, 250);
+    const interval = setInterval(calculatePosition, 100);
 
     return () => {
       window.removeEventListener("resize", calculatePosition);
@@ -164,9 +189,9 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
 
   // Expose restart event globally for the header icon
   useEffect(() => {
-    (window as any).restartChatTour = handleForceRestart;
+    (window as unknown as { restartChatTour?: () => void }).restartChatTour = handleForceRestart;
     return () => {
-      delete (window as any).restartChatTour;
+      delete (window as unknown as { restartChatTour?: () => void }).restartChatTour;
     };
   }, []);
 
@@ -183,33 +208,134 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
     zIndex: 9999
   };
 
-  if (isTargetVisible && step.position !== "center") {
-    const spacing = 18;
-    if (step.position === "bottom") {
-      modalStyle = {
-        ...modalStyle,
-        top: `${stepPosition.top + stepPosition.height + spacing}px`,
-        left: `${stepPosition.left + stepPosition.width / 2 - 180}px`
-      };
-    } else if (step.position === "top") {
-      modalStyle = {
-        ...modalStyle,
-        top: `${stepPosition.top - 200 - spacing}px`,
-        left: `${stepPosition.left + stepPosition.width / 2 - 180}px`
-      };
-    } else if (step.position === "left") {
-      modalStyle = {
-        ...modalStyle,
-        top: `${stepPosition.top + stepPosition.height / 2 - 90}px`,
-        left: `${stepPosition.left - 380 - spacing}px`
-      };
-    } else if (step.position === "right") {
-      modalStyle = {
-        ...modalStyle,
-        top: `${stepPosition.top + stepPosition.height / 2 - 90}px`,
-        left: `${stepPosition.left + stepPosition.width + spacing}px`
-      };
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
+  if (isMobile) {
+    // Smart mobile placement to prevent target overlap
+    let mobilePlacementStyle: React.CSSProperties = {
+      bottom: "24px",
+      top: "auto"
+    };
+    
+    if (isTargetVisible) {
+      const targetCenterY = stepPosition.top + stepPosition.height / 2;
+      const viewportCenterY = typeof window !== "undefined" ? window.innerHeight / 2 : 400;
+      if (targetCenterY > viewportCenterY) {
+        // Target is in bottom half, place tour card at top of viewport
+        mobilePlacementStyle = {
+          top: "24px",
+          bottom: "auto"
+        };
+      }
     }
+
+    modalStyle = {
+      ...modalStyle,
+      left: "16px",
+      right: "16px",
+      ...mobilePlacementStyle,
+      transform: "none"
+    };
+  } else if (isTargetVisible && step.position !== "center") {
+    const spacing = 18;
+    const safetyMargin = 16;
+    const cardWidth = cardRef.current ? cardRef.current.offsetWidth : 360;
+    const cardHeight = cardRef.current ? cardRef.current.offsetHeight : 200;
+
+    const windowWidth = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const windowHeight = typeof window !== "undefined" ? window.innerHeight : 800;
+
+    let position = step.position;
+
+    // 1. Check space availability on all sides
+    const hasSpaceLeft = stepPosition.left >= cardWidth + spacing + safetyMargin;
+    const hasSpaceRight = windowWidth - (stepPosition.left + stepPosition.width) >= cardWidth + spacing + safetyMargin;
+    const hasSpaceTop = stepPosition.top >= cardHeight + spacing + safetyMargin;
+    const hasSpaceBottom = windowHeight - (stepPosition.top + stepPosition.height) >= cardHeight + spacing + safetyMargin;
+
+    // 2. Flip position dynamically if the preferred side lacks space
+    if (position === "left" && !hasSpaceLeft) {
+      if (hasSpaceRight) position = "right";
+      else if (hasSpaceBottom) position = "bottom";
+      else if (hasSpaceTop) position = "top";
+    } else if (position === "right" && !hasSpaceRight) {
+      if (hasSpaceLeft) position = "left";
+      else if (hasSpaceBottom) position = "bottom";
+      else if (hasSpaceTop) position = "top";
+    } else if (position === "top" && !hasSpaceTop) {
+      if (hasSpaceBottom) position = "bottom";
+      else if (hasSpaceRight) position = "right";
+      else if (hasSpaceLeft) position = "left";
+    } else if (position === "bottom" && !hasSpaceBottom) {
+      if (hasSpaceTop) position = "top";
+      else if (hasSpaceRight) position = "right";
+      else if (hasSpaceLeft) position = "left";
+    }
+
+    let computedTop = 0;
+    let computedLeft = 0;
+
+    // 3. Compute position based on resolved side
+    if (position === "bottom") {
+      computedTop = stepPosition.top + stepPosition.height + spacing;
+      computedLeft = stepPosition.left + stepPosition.width / 2 - cardWidth / 2;
+    } else if (position === "top") {
+      computedTop = stepPosition.top - cardHeight - spacing;
+      computedLeft = stepPosition.left + stepPosition.width / 2 - cardWidth / 2;
+    } else if (position === "left") {
+      computedTop = stepPosition.top + stepPosition.height / 2 - cardHeight / 2;
+      computedLeft = stepPosition.left - cardWidth - spacing;
+    } else if (position === "right") {
+      computedTop = stepPosition.top + stepPosition.height / 2 - cardHeight / 2;
+      computedLeft = stepPosition.left + stepPosition.width + spacing;
+    }
+
+    // 4. Absolute clamp within safety margins
+    computedLeft = Math.max(safetyMargin, Math.min(computedLeft, windowWidth - cardWidth - safetyMargin));
+    computedTop = Math.max(safetyMargin, Math.min(computedTop, windowHeight - cardHeight - safetyMargin));
+
+    // 5. If clamped position overlaps the target, nudge to the quadrant with the most space
+    const isOverlapping = !(
+      computedLeft + cardWidth < stepPosition.left ||
+      computedLeft > stepPosition.left + stepPosition.width ||
+      computedTop + cardHeight < stepPosition.top ||
+      computedTop > stepPosition.top + stepPosition.height
+    );
+
+    if (isOverlapping) {
+      const spaces = [
+        { name: "top", size: stepPosition.top },
+        { name: "bottom", size: windowHeight - (stepPosition.top + stepPosition.height) },
+        { name: "left", size: stepPosition.left },
+        { name: "right", size: windowWidth - (stepPosition.left + stepPosition.width) }
+      ];
+      spaces.sort((a, b) => b.size - a.size);
+      const bestSpace = spaces[0].name;
+
+      if (bestSpace === "top") {
+        computedTop = stepPosition.top - cardHeight - spacing;
+        computedLeft = stepPosition.left + stepPosition.width / 2 - cardWidth / 2;
+      } else if (bestSpace === "bottom") {
+        computedTop = stepPosition.top + stepPosition.height + spacing;
+        computedLeft = stepPosition.left + stepPosition.width / 2 - cardWidth / 2;
+      } else if (bestSpace === "left") {
+        computedTop = stepPosition.top + stepPosition.height / 2 - cardHeight / 2;
+        computedLeft = stepPosition.left - cardWidth - spacing;
+      } else if (bestSpace === "right") {
+        computedTop = stepPosition.top + stepPosition.height / 2 - cardHeight / 2;
+        computedLeft = stepPosition.left + stepPosition.width + spacing;
+      }
+
+      computedLeft = Math.max(safetyMargin, Math.min(computedLeft, windowWidth - cardWidth - safetyMargin));
+      computedTop = Math.max(safetyMargin, Math.min(computedTop, windowHeight - cardHeight - safetyMargin));
+    }
+
+    modalStyle = {
+      ...modalStyle,
+      top: `${computedTop}px`,
+      left: `${computedLeft}px`,
+      transform: "none"
+    };
   } else {
     modalStyle = {
       ...modalStyle,
@@ -217,23 +343,6 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
       left: "50%",
       transform: "translate(-50%, -50%)"
     };
-  }
-
-  // Prevent popover clipping outside viewport
-  if (isTargetVisible && step.position !== "center" && typeof window !== "undefined") {
-    const parsedLeft = parseFloat(String(modalStyle.left));
-    if (parsedLeft < 16) {
-      modalStyle.left = "16px";
-    } else if (parsedLeft + 360 > window.innerWidth - 16) {
-      modalStyle.left = `${window.innerWidth - 376}px`;
-    }
-
-    const parsedTop = parseFloat(String(modalStyle.top));
-    if (parsedTop < 16) {
-      modalStyle.top = "16px";
-    } else if (parsedTop + 200 > window.innerHeight - 16) {
-      modalStyle.top = `${window.innerHeight - 216}px`;
-    }
   }
 
   // Clip path mask for highlighting target
@@ -287,6 +396,7 @@ export function ChatTour({ isAI, activeSessionId }: ChatTourProps) {
 
       <AnimatePresence mode="wait">
         <motion.div
+          ref={cardRef}
           key={currentStep}
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}

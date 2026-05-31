@@ -374,6 +374,27 @@ function ChatSessionInner() {
   const [showConfig, setShowConfig] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [deleteModalId, setDeleteModalId] = useState<string | null>(null);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(true);
+
+  useEffect(() => {
+    if (peerId || activeSessionId || isNewSession) {
+      setShowMobileSidebar(false);
+    } else {
+      setShowMobileSidebar(true);
+    }
+  }, [peerId, activeSessionId, isNewSession]);
+
+  // Support programmatic toggle during tutorial tours
+  useEffect(() => {
+    const handleShow = () => setShowMobileSidebar(true);
+    const handleHide = () => setShowMobileSidebar(false);
+    window.addEventListener("showChatSidebar", handleShow);
+    window.addEventListener("hideChatSidebar", handleHide);
+    return () => {
+      window.removeEventListener("showChatSidebar", handleShow);
+      window.removeEventListener("hideChatSidebar", handleHide);
+    };
+  }, []);
   // Voice UI States
   const [isListening, setIsListening] = useState(false);
   const [showVoiceMode, setShowVoiceMode] = useState(false);
@@ -1150,17 +1171,27 @@ function ChatSessionInner() {
           aiSessions={aiSessions}
           selectedSessionId={activeSessionId}
           onDeleteSession={handleDeleteAISession}
+          mobileOpen={showMobileSidebar}
         />
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col h-full relative">
+        <div className={`flex-1 flex flex-col h-full relative ${showMobileSidebar ? 'hidden md:flex' : 'flex'}`}>
 
           {/* Top Header */}
           <div className="h-[72px] border-b border-border bg-bg-elevated px-6 flex items-center justify-between shrink-0 sticky top-0 z-10">
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="md:hidden text-text-muted hover:text-text-primary p-2 bg-bg-secondary rounded-full">
-                <ChevronLeft size={20} />
-              </Link>
+              {!showMobileSidebar ? (
+                <button
+                  onClick={() => setShowMobileSidebar(true)}
+                  className="md:hidden text-text-muted hover:text-text-primary p-2 bg-bg-secondary rounded-full active:scale-90 transition-transform"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+              ) : (
+                <Link href="/dashboard" className="md:hidden text-text-muted hover:text-text-primary p-2 bg-bg-secondary rounded-full">
+                  <ChevronLeft size={20} />
+                </Link>
+              )}
 
               <div className="flex items-center gap-3">
                 <div className="relative group">

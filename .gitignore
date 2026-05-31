@@ -72,3 +72,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 *.backup
+
+skills-lock.json
+.agents/

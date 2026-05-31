@@ -23,6 +23,7 @@ interface ChatSidebarProps {
   aiSessions?: any[];
   selectedSessionId?: string;
   onDeleteSession?: (id: string) => void;
+  mobileOpen?: boolean;
 }
 
 export function ChatSidebar({
@@ -33,6 +34,7 @@ export function ChatSidebar({
   aiSessions,
   selectedSessionId,
   onDeleteSession,
+  mobileOpen,
 }: ChatSidebarProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [search, setSearch] = useState("");
@@ -67,7 +69,12 @@ export function ChatSidebar({
   const requests = filteredContacts.filter(c => c.status === 'PENDING' || c.status === 'MESSAGE_ONLY');
 
   return (
-    <div id="chat-sidebar" className="w-[320px] border-r border-border h-full flex-col bg-bg-elevated hidden md:flex">
+    <div 
+      id="chat-sidebar" 
+      className={`w-full md:w-[320px] border-r border-border h-full flex-col bg-bg-elevated ${
+        mobileOpen ? "flex animate-in slide-in-from-left duration-250" : "hidden md:flex"
+      }`}
+    >
       <div className="p-5 border-b border-border">
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-2xl font-display font-extrabold text-text-primary flex items-center gap-2">
