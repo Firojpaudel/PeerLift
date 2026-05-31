@@ -38,7 +38,7 @@ export async function createGoogleMeetLink(
 
     const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
 
-    const event: google.calendar_v3.Schema$Event = {
+    const event = {
       summary: summary,
       description: 'Peer tutoring session scheduled via PeerLift',
       start: {
@@ -55,11 +55,8 @@ export async function createGoogleMeetLink(
           conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       },
+      attendees: attendeeEmails.length > 0 ? attendeeEmails.map(email => ({ email })) : undefined
     };
-
-    if (attendeeEmails.length > 0) {
-      event.attendees = attendeeEmails.map(email => ({ email }));
-    }
 
     const response = await calendar.events.insert({
       calendarId: 'primary',
