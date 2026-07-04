@@ -117,7 +117,7 @@ ${contextData?.learningGoal ? `\nUser's Learning Goal/Topic: ${contextData.learn
 ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextData.documentText}\n---------------------------------` : ""}`;
 
     const tModel = isReasoning
-      ? groq("deepseek-r1-distill-llama-70b")
+      ? groq("deepseek-r1-distill-qwen-32b")
       : groq("llama-3.3-70b-versatile");
 
     const result = await streamText({
@@ -126,7 +126,7 @@ ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextD
       system: systemPrompt,
       providerOptions: {
         groq: {
-          reasoning_format: "raw",
+          reasoningFormat: "parsed",
         },
       },
       tools: {

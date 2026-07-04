@@ -21,6 +21,10 @@ export function getMessageText(m: any): string {
     text = m.content;
   }
   
+  if (m.reasoning && typeof m.reasoning === 'string' && !text.includes('<think>')) {
+    text = `<think>${m.reasoning}</think>\n\n` + text;
+  }
+  
   // Intercept and style <think> tags natively using expandable HTML!
   if (text.includes('<think>') || text.includes('Thinking Mode: active')) {
     text = text.replace(/<think>\n?/g, '<details open class="mb-4 bg-bg-secondary/50 border border-primary-500/10 rounded-xl overflow-hidden shadow-sm"><summary class="px-4 py-3 bg-bg-elevated border-b border-border cursor-pointer font-bold text-primary-500 text-[13px] hover:bg-white/5 transition-colors select-none">🧠 Thinking...</summary><div class="p-4 text-[13px] text-text-secondary italic opacity-90 leading-relaxed overflow-x-auto whitespace-pre-wrap font-mono">');
