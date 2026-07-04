@@ -5,11 +5,11 @@ import prisma from './prisma';
  * Creates a Google Calendar event with a Google Meet link.
  * Note: This requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and a REFRESH_TOKEN.
  */
-function generateMockMeetLink(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz';
+function generateFallbackMeetLink(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   const rand = (len: number) =>
     Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `https://meet.google.com/${rand(3)}-${rand(4)}-${rand(3)}`;
+  return `https://meet.jit.si/peerlift-${rand(12)}`;
 }
 
 export async function createGoogleMeetLink(
@@ -36,9 +36,9 @@ export async function createGoogleMeetLink(
     // Graceful fallback if Google credentials are not set
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !refreshToken) {
       console.warn(
-        'Google Calendar credentials not fully configured. Generating mock Google Meet link fallback.'
+        'Google Calendar credentials not fully configured. Generating fallback Jitsi Meet link.'
       );
-      return generateMockMeetLink();
+      return generateFallbackMeetLink();
     }
 
     const oauth2Client = new google.auth.OAuth2(
@@ -83,9 +83,9 @@ export async function createGoogleMeetLink(
       sendUpdates: 'all', // Notify attendees via email and automatically populate their calendars
     });
 
-    return response.data.hangoutLink || generateMockMeetLink();
+    return response.data.hangoutLink || generateFallbackMeetLink();
   } catch (error) {
-    console.error('Error creating Google Meet link, falling back to mock link:', error);
-    return generateMockMeetLink();
+    console.error('Error creating Google Meet link, falling back to Jitsi Meet link:', error);
+    return generateFallbackMeetLink();
   }
 }

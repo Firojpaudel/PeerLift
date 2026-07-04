@@ -83,7 +83,7 @@ export function MessageList({
           // For DM chat: matches the session user's ID
           const isOwn = isAI ? m.role === 'user' : m.userId === sessionUserId;
         const isSystem = m.isSystem || m.role === 'system';
-        const isMeeting = isSystem && (m.content.includes("https://meet.google.com") || m.content.includes("Meeting Scheduled"));
+        const isMeeting = isSystem && (m.content.includes("https://meet.google.com") || m.content.includes("https://meet.jit.si") || m.content.includes("Meeting Scheduled"));
 
         return (
           <div key={m.id} className={`flex items-start gap-3 max-w-[85%] ${isOwn ? 'ml-auto flex-row-reverse' : ''}`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Video, Calendar, Clock, ExternalLink } from "lucide-react";
+import { Video, Clock, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 interface MeetingCardProps {
@@ -13,7 +13,7 @@ interface MeetingCardProps {
 export function MeetingCard({ content, isOwn }: MeetingCardProps) {
   // Parse the message to extract date and link
   // Message format: 📅 **Meeting Scheduled!**\n\nI have generated a secure Google Meet link for our session:\n${meetLink}\n\n*Starts: ${start.toLocaleString()}*
-  const linkMatch = content.match(/https:\/\/meet\.google\.com\/[a-z0-9-]+/);
+  const linkMatch = content.match(/https?:\/\/(meet\.google\.com|meet\.jit\.si)\/[a-zA-Z0-9-_]+/);
   const dateMatch = content.match(/\*Starts: (.*?)\*/);
   const titleMatch = content.match(/\*\*(.*?)\*\*/);
   
@@ -22,6 +22,8 @@ export function MeetingCard({ content, isOwn }: MeetingCardProps) {
   const title = titleMatch ? titleMatch[1] : "Meeting Scheduled";
 
   if (!meetLink) return <p className="whitespace-pre-wrap">{content}</p>;
+
+  const isJitsi = meetLink.includes("meet.jit.si");
 
   return (
     <div className={`flex flex-col gap-3 p-4 rounded-2xl border w-full max-w-sm shadow-sm transition-all ${
@@ -55,7 +57,7 @@ export function MeetingCard({ content, isOwn }: MeetingCardProps) {
           className="w-full h-10 flex items-center justify-center gap-2 font-bold text-sm bg-primary-500 hover:bg-primary-600 shadow-md group"
         >
           <ExternalLink size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-          Join Google Meet
+          {isJitsi ? "Join Jitsi Meet" : "Join Google Meet"}
         </Button>
       </a>
       
