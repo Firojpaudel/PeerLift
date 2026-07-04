@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -118,7 +119,11 @@ export default function RegisterPage() {
         </div>
       </div>
 
-      <button type="button" className="w-full flex items-center justify-center gap-3 bg-bg-elevated border border-primary-300 text-primary-600 font-semibold rounded-lg h-12 transition-colors hover:bg-bg-secondary relative">
+      <button 
+        type="button" 
+        onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+        className="w-full flex items-center justify-center gap-3 bg-bg-elevated border border-primary-300 text-primary-600 font-semibold rounded-lg h-12 transition-colors hover:bg-bg-secondary relative"
+      >
          <span className="absolute left-6 text-primary-500 font-bold">G</span>
          <span>Google</span>
       </button>

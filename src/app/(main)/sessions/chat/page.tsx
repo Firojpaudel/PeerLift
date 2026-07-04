@@ -318,6 +318,79 @@ const markdownComponents = {
     );
   }
 };
+function splitTextIntoSpeechChunks(text: string): string[] {
+  // 1. Remove deepseek thinking blocks
+  let cleanText = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+
+  // 2. Remove code blocks entirely (they are not meant to be read aloud)
+  cleanText = cleanText.replace(/```[\s\S]*?```/g, '');
+
+  // 3. Remove inline code backticks but keep the code content
+  cleanText = cleanText.replace(/`([^`]+)`/g, '$1');
+
+  // 4. Strip markdown image tags
+  cleanText = cleanText.replace(/!\[([^\]]*)\]\([^)]+\)/g, '');
+
+  // 5. Convert markdown links e.g. [Next.js](https://nextjs.org) to just the text "Next.js"
+  cleanText = cleanText.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+  // 6. Clean up headers (e.g. ### Header -> Header)
+  cleanText = cleanText.replace(/^\s*#{1,6}\s+/gm, '');
+
+  // 7. Remove list bullets (e.g. * Item or - Item -> Item)
+  cleanText = cleanText.replace(/^\s*[-*+]\s+/gm, '');
+
+  // 8. Remove list numbers (e.g. 1. Item -> Item)
+  cleanText = cleanText.replace(/^\s*\d+\.\s+/gm, '');
+
+  // 9. Remove any remaining HTML tags (like <br />)
+  cleanText = cleanText.replace(/<[^>]*>/g, '');
+
+  // 10. Clean up any remaining markdown formatting symbols
+  cleanText = cleanText.replace(/[*_~|]/g, '');
+
+  // 11. Normalize spaces and lines
+  cleanText = cleanText
+    .replace(/\s+/g, ' ')
+    .replace(/={2,}/g, '')
+    .replace(/-{2,}/g, '')
+    .trim();
+
+  if (!cleanText) return [];
+
+  // Match sentences (including punctuation)
+  const sentenceRegex = /[^.!?]+[.!?]*/g;
+  const rawChunks = cleanText.match(sentenceRegex) || [cleanText];
+  const chunks: string[] = [];
+
+  for (let chunk of rawChunks) {
+    chunk = chunk.trim();
+    if (!chunk) continue;
+
+    // If a sentence is longer than 180 chars, chunk it by commas or spaces
+    if (chunk.length > 180) {
+      const parts = chunk.split(/([,;:\-\n]|\s{2,})/);
+      let currentPart = "";
+      for (const p of parts) {
+        if ((currentPart + p).length > 180) {
+          if (currentPart.trim()) {
+            chunks.push(currentPart.trim());
+          }
+          currentPart = p;
+        } else {
+          currentPart += p;
+        }
+      }
+      if (currentPart.trim()) {
+        chunks.push(currentPart.trim());
+      }
+    } else {
+      chunks.push(chunk);
+    }
+  }
+
+  return chunks.filter(c => c.trim().length > 1);
+}
 
 
 function ChatSessionInner() {
@@ -424,6 +497,158 @@ function ChatSessionInner() {
   const recognitionRef = useRef<any>(null);
   const sendAIMessageRef = useRef<(options: { text: string }) => void>(() => {});
 
+  // Groq TTS Speech Queue States & Refs
+  const audioQueueRef = useRef<{ text: string; audioUrl?: string }[]>([]);
+  const isPlayingAudioRef = useRef<boolean>(false);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const clearAudioQueue = useCallback(() => {
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+      } catch (e) {}
+      currentAudioRef.current = null;
+    }
+    for (const item of audioQueueRef.current) {
+      if (item.audioUrl) {
+        try {
+          URL.revokeObjectURL(item.audioUrl);
+        } catch (e) {}
+      }
+    }
+    audioQueueRef.current = [];
+    isPlayingAudioRef.current = false;
+    setIsSpeakingVoice(false);
+  }, []);
+
+  const playAudioQueue = useCallback(async () => {
+    if (isPlayingAudioRef.current) return;
+    if (audioQueueRef.current.length === 0) {
+      setIsSpeakingVoice(false);
+      return;
+    }
+
+    isPlayingAudioRef.current = true;
+    setIsSpeakingVoice(true);
+
+    const playNext = async () => {
+      if (audioQueueRef.current.length === 0) {
+        isPlayingAudioRef.current = false;
+        setIsSpeakingVoice(false);
+        currentAudioRef.current = null;
+        return;
+      }
+
+      const currentItem = audioQueueRef.current[0];
+
+      if (!currentItem.audioUrl) {
+        try {
+          const mappedVoice = tutorGender === 'male' ? 'troy' : 'autumn';
+          const res = await fetch('/api/chat/speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: currentItem.text, voice: mappedVoice })
+          });
+          if (res.ok) {
+            const blob = await res.blob();
+            currentItem.audioUrl = URL.createObjectURL(blob);
+          } else {
+            console.error("Failed to generate speech for chunk:", currentItem.text);
+            audioQueueRef.current.shift();
+            playNext();
+            return;
+          }
+        } catch (err) {
+          console.error("Failed to fetch speech:", err);
+          audioQueueRef.current.shift();
+          playNext();
+          return;
+        }
+      }
+
+      if (currentItem.audioUrl) {
+        const audio = new Audio(currentItem.audioUrl);
+        currentAudioRef.current = audio;
+        
+        audio.onended = () => {
+          if (currentItem.audioUrl) {
+            URL.revokeObjectURL(currentItem.audioUrl);
+          }
+          audioQueueRef.current.shift();
+          playNext();
+        };
+
+        audio.onerror = () => {
+          if (currentItem.audioUrl) {
+            URL.revokeObjectURL(currentItem.audioUrl);
+          }
+          audioQueueRef.current.shift();
+          playNext();
+        };
+
+        try {
+          await audio.play();
+        } catch (playErr) {
+          console.error("Failed to play audio:", playErr);
+          if (currentItem.audioUrl) {
+            URL.revokeObjectURL(currentItem.audioUrl);
+          }
+          audioQueueRef.current.shift();
+          playNext();
+        }
+      }
+    };
+
+    playNext();
+  }, [tutorGender]);
+
+  const prefetchQueueItems = useCallback(async () => {
+    const mappedVoice = tutorGender === 'male' ? 'troy' : 'autumn';
+    
+    for (const item of audioQueueRef.current) {
+      if (item.audioUrl) continue;
+      
+      try {
+        const res = await fetch('/api/chat/speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: item.text, voice: mappedVoice })
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          item.audioUrl = URL.createObjectURL(blob);
+          if (!isPlayingAudioRef.current && audioQueueRef.current[0] === item) {
+            playAudioQueue();
+          }
+        }
+      } catch (err) {
+        console.error("Failed to prefetch speech:", err);
+      }
+    }
+  }, [tutorGender, playAudioQueue]);
+
+  useEffect(() => {
+    return () => {
+      clearAudioQueue();
+    };
+  }, [clearAudioQueue]);
+
+  const toggleReasoningMode = async (newValue: boolean) => {
+    setIsReasoningMode(newValue);
+    if (activeSessionId) {
+      try {
+        await fetch(`/api/chat/sessions/${activeSessionId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isReasoning: newValue })
+        });
+      } catch (err) {
+        console.error("Failed to update session reasoning mode:", err);
+      }
+    }
+  };
+
+
   // --- AI Hook (Decoupled New Vercel AI SDK Integration) ---
   const [aiInput, setAiInput] = useState('');
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -485,6 +710,7 @@ function ChatSessionInner() {
   const stopVoiceMode = () => {
     setShowVoiceMode(false);
     window.speechSynthesis.cancel();
+    clearAudioQueue();
     setIsSpeakingVoice(false);
     if (recognitionRef.current) {
       try {
@@ -499,6 +725,7 @@ function ChatSessionInner() {
 
   const handleInterrupt = () => {
     window.speechSynthesis.cancel();
+    clearAudioQueue();
     setIsSpeakingVoice(false);
   };
 
@@ -1036,33 +1263,21 @@ function ChatSessionInner() {
     if (lastMessage.id === lastSpokenMsgId.current) return;
     lastSpokenMsgId.current = lastMessage.id;
 
-    const textToSpeak = getMessageText(lastMessage)
-      .replace(/<think>[\s\S]*?<\/think>/g, '')
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/[#*`_\[\]()~|>]/g, '')
-      .replace(/={2,}/g, '')
-      .replace(/-{2,}/g, '');
+    const rawText = getMessageText(lastMessage);
+    const chunks = splitTextIntoSpeechChunks(rawText);
 
-    if (!textToSpeak.trim()) return;
+    if (chunks.length === 0) return;
 
-    window.speechSynthesis.cancel();
-    setIsSpeakingVoice(true);
+    // Clear previous audio
+    clearAudioQueue();
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.voice = getGenderedVoice();
-    utterance.rate = 1.05;
-    utterance.pitch = tutorGender === 'male' ? 0.9 : 1.05;
+    // Populate queue with text chunks
+    audioQueueRef.current = chunks.map(c => ({ text: c }));
 
-    utterance.onend = () => {
-      setIsSpeakingVoice(false);
-    };
-
-    utterance.onerror = () => {
-      setIsSpeakingVoice(false);
-    };
-
-    window.speechSynthesis.speak(utterance);
-  }, [isAILoading, aiMessages, showVoiceMode, availableVoices]);
+    // Start fetching and playing
+    prefetchQueueItems();
+    playAudioQueue();
+  }, [isAILoading, aiMessages, showVoiceMode, clearAudioQueue, prefetchQueueItems, playAudioQueue]);
 
   // Handle DM dispatch routing
   const handleSendDM = async (e: React.FormEvent) => {
@@ -1469,7 +1684,7 @@ function ChatSessionInner() {
                   {isAI && (
                     <div className="pt-4 mt-4 border-t border-border">
                       <label className="flex items-center gap-2 cursor-pointer group">
-                        <input type="checkbox" checked={isReasoningMode} onChange={(e) => setIsReasoningMode(e.target.checked)} className="rounded border-border text-primary-500 focus:ring-primary-500" />
+                        <input type="checkbox" checked={isReasoningMode} onChange={(e) => toggleReasoningMode(e.target.checked)} className="rounded border-border text-primary-500 focus:ring-primary-500" />
                         <span className="text-sm font-medium text-text-primary group-hover:text-primary-500 transition-colors">Thinking Mode (Reasoning)</span>
                       </label>
                       <p className="text-[10px] text-text-muted mt-2">Enables step-by-step logical reasoning before responding.</p>
@@ -1508,7 +1723,7 @@ function ChatSessionInner() {
                     <button
                       id="chat-reasoning-mode-button"
                       type="button"
-                      onClick={() => setIsReasoningMode(!isReasoningMode)}
+                      onClick={() => toggleReasoningMode(!isReasoningMode)}
                       className={`p-2.5 transition-colors rounded-xl ${isReasoningMode ? 'text-amber-500' : 'text-text-muted hover:text-amber-600'}`}
                       title="Thinking Mode"
                     >

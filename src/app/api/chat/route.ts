@@ -73,7 +73,18 @@ export async function POST(req: Request) {
       }).catch((err: any) => console.error("Failed to store user message:", err));
     }
 
-    const tutorName = contextData?.tutorName || "Lumina AI";
+    let isReasoning = contextData?.isReasoning;
+    let tutorName = contextData?.tutorName || "Lumina AI";
+
+    if (sessionId) {
+      const dbSession = await prisma.aIChatSession.findUnique({
+        where: { id: sessionId }
+      });
+      if (dbSession) {
+        isReasoning = isReasoning !== undefined ? isReasoning : dbSession.isReasoning;
+        tutorName = tutorName || dbSession.tutorName;
+      }
+    }
 
     // Adding dynamic system prompt based on user settings
     const systemPrompt = `You are "${tutorName}", an elite peer tutor on PeerLift. 
@@ -86,7 +97,7 @@ ONLY when explaining complex topics, workflows, or architectures that genuinely 
 - If the user asks "Can you hear me?", "Do you hear me?", "Are you listening?", "Is my mic working?", or similar questions about voice perception, you MUST reply with warm, enthusiastic, conversational voice assurance: e.g., "Yes! I can hear you loud and clear!", "I hear you perfectly dear, let's keep speaking!", "Loud and clear! I'm listening closely, go ahead."
 - Adopt a natural, warm, highly verbal, and conversational tone suited for voice-to-voice interactions.
 
-${contextData?.isReasoning ? "### REASONING INSTRUCTIONS: YOU MUST THINK STEP-BY-STEP. ALWAYS enclose your internal monologue and step-by-step thinking inside <think> and </think> tags at the very start of your response." : ""}
+${isReasoning ? "### REASONING INSTRUCTIONS: YOU MUST THINK STEP-BY-STEP. ALWAYS enclose your internal monologue and step-by-step thinking inside <think> and </think> tags at the very start of your response." : ""}
 
 ### CRITICAL MERMAID RULES (BRANCHING & COMPLEXITY):
 1. USE STRICT SYNTAX: Always use \`graph LR\` (Left-to-Right) or \`graph TD\` (Top-Down).
@@ -105,7 +116,7 @@ Keep your tone warm, empowering, and human. Emphasize learning step-by-step.
 ${contextData?.learningGoal ? `\nUser's Learning Goal/Topic: ${contextData.learningGoal} | Detail Level: ${contextData.learningDetail}` : ""}
 ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextData.documentText}\n---------------------------------` : ""}`;
 
-    const tModel = contextData?.isReasoning
+    const tModel = isReasoning
       ? groq("deepseek-r1-distill-llama-70b")
       : groq("llama-3.3-70b-versatile");
 
