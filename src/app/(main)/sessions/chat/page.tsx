@@ -519,6 +519,7 @@ function ChatSessionInner() {
   const audioQueueRef = useRef<{ text: string; audioUrl?: string }[]>([]);
   const isPlayingAudioRef = useRef<boolean>(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const useGroqTTSRef = useRef<boolean>(true); // false = browser fallback mode (rate-limited)
 
   const clearAudioQueue = useCallback(() => {
     if (currentAudioRef.current) {
@@ -527,6 +528,8 @@ function ChatSessionInner() {
       } catch (e) {}
       currentAudioRef.current = null;
     }
+    // Also cancel any browser speech in progress
+    window.speechSynthesis?.cancel();
     for (const item of audioQueueRef.current) {
       if (item.audioUrl) {
         try {
@@ -539,10 +542,57 @@ function ChatSessionInner() {
     setIsSpeakingVoice(false);
   }, []);
 
+  // Browser SpeechSynthesis fallback — speaks remaining queue items sequentially
+  const speakRemainingWithBrowser = useCallback(() => {
+    if (audioQueueRef.current.length === 0) {
+      isPlayingAudioRef.current = false;
+      setIsSpeakingVoice(false);
+      return;
+    }
+
+    isPlayingAudioRef.current = true;
+    setIsSpeakingVoice(true);
+
+    const currentItem = audioQueueRef.current[0];
+    const utterance = new SpeechSynthesisUtterance(currentItem.text);
+
+    // Pick the best browser voice for the tutor gender
+    const enVoices = (window.speechSynthesis?.getVoices() || []).filter(v => v.lang.startsWith('en'));
+    if (tutorGender === 'male') {
+      utterance.voice = enVoices.find(v => /David|Daniel|James|Mark|Guy/i.test(v.name))
+        || enVoices.find(v => /\bmale\b/i.test(v.name) && !/female/i.test(v.name))
+        || enVoices[0] || null;
+      utterance.pitch = 0.9;
+    } else {
+      utterance.voice = enVoices.find(v => /Zira|Samantha|Karen|Fiona|Victoria|Susan/i.test(v.name))
+        || enVoices.find(v => /female/i.test(v.name))
+        || enVoices[0] || null;
+      utterance.pitch = 1.05;
+    }
+    utterance.rate = 1.05;
+
+    utterance.onend = () => {
+      audioQueueRef.current.shift();
+      speakRemainingWithBrowser();
+    };
+    utterance.onerror = () => {
+      audioQueueRef.current.shift();
+      speakRemainingWithBrowser();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }, [tutorGender]);
+
   const playAudioQueue = useCallback(async () => {
     if (isPlayingAudioRef.current) return;
     if (audioQueueRef.current.length === 0) {
       setIsSpeakingVoice(false);
+      return;
+    }
+
+    // If Groq TTS is rate-limited, use browser fallback for all remaining chunks
+    if (!useGroqTTSRef.current) {
+      speakRemainingWithBrowser();
       return;
     }
 
@@ -570,6 +620,13 @@ function ChatSessionInner() {
           if (res.ok) {
             const blob = await res.blob();
             currentItem.audioUrl = URL.createObjectURL(blob);
+          } else if (res.status === 429) {
+            // Rate limited — switch to browser fallback for all remaining chunks
+            console.warn("[TTS] Groq rate limited, falling back to browser SpeechSynthesis");
+            useGroqTTSRef.current = false;
+            isPlayingAudioRef.current = false;
+            speakRemainingWithBrowser();
+            return;
           } else {
             console.error("Failed to generate speech for chunk:", currentItem.text);
             audioQueueRef.current.shift();
@@ -578,8 +635,10 @@ function ChatSessionInner() {
           }
         } catch (err) {
           console.error("Failed to fetch speech:", err);
-          audioQueueRef.current.shift();
-          playNext();
+          // Network error — also fall back to browser
+          useGroqTTSRef.current = false;
+          isPlayingAudioRef.current = false;
+          speakRemainingWithBrowser();
           return;
         }
       }
@@ -620,9 +679,12 @@ function ChatSessionInner() {
     };
 
     playNext();
-  }, [tutorGender]);
+  }, [tutorGender, speakRemainingWithBrowser]);
 
   const prefetchQueueItems = useCallback(async () => {
+    // Skip prefetch if we're in browser fallback mode
+    if (!useGroqTTSRef.current) return;
+
     const mappedVoice = tutorGender === 'male' ? 'troy' : 'autumn';
     
     for (const item of audioQueueRef.current) {
@@ -640,12 +702,20 @@ function ChatSessionInner() {
           if (!isPlayingAudioRef.current && audioQueueRef.current[0] === item) {
             playAudioQueue();
           }
+        } else if (res.status === 429) {
+          // Rate limited — stop prefetching, playAudioQueue will handle fallback
+          console.warn("[TTS Prefetch] Groq rate limited, stopping prefetch");
+          useGroqTTSRef.current = false;
+          if (!isPlayingAudioRef.current) {
+            speakRemainingWithBrowser();
+          }
+          return;
         }
       } catch (err) {
         console.error("Failed to prefetch speech:", err);
       }
     }
-  }, [tutorGender, playAudioQueue]);
+  }, [tutorGender, playAudioQueue, speakRemainingWithBrowser]);
 
   useEffect(() => {
     return () => {
