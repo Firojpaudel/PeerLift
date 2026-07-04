@@ -1,35 +1,35 @@
-"use client";
+'use client';
 
-import { useState, Suspense } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { useState, Suspense } from 'react';
+import { signIn } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("from") || "/dashboard";
-  
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const callbackUrl = searchParams.get('from') || '/dashboard';
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setErrorMsg("");
-    
-    const result = await signIn("credentials", {
+    setErrorMsg('');
+
+    const result = await signIn('credentials', {
       email,
       password,
       redirect: false,
     });
-    
+
     if (result?.error) {
       console.error(result.error);
-      setErrorMsg("Login failed! Please check your credentials and try again.");
+      setErrorMsg('Login failed! Please check your credentials and try again.');
       setIsLoading(false);
     } else {
       router.push(callbackUrl);
@@ -40,7 +40,9 @@ function LoginForm() {
   return (
     <div className="flex flex-col gap-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-display font-extrabold text-text-primary mb-2">Welcome back</h1>
+        <h1 className="text-3xl font-display font-extrabold text-text-primary mb-2">
+          Welcome back
+        </h1>
         <p className="text-text-secondary text-sm">Please enter your details to sign in.</p>
       </div>
 
@@ -50,39 +52,50 @@ function LoginForm() {
             {errorMsg}
           </div>
         )}
-        
+
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">Email</label>
-          <Input 
-            type="email" 
-            placeholder="hello@peerlift.app" 
+          <Input
+            type="email"
+            placeholder="hello@peerlift.app"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required 
+            required
           />
         </div>
-        
+
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1">Password</label>
-          <Input 
-            type="password" 
-            placeholder="••••••••" 
+          <Input
+            type="password"
+            placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required 
+            required
           />
         </div>
 
         <div className="flex items-center justify-between mt-2">
           <label className="flex items-center gap-2 text-sm text-text-secondary">
-            <input type="checkbox" defaultChecked className="rounded border-border text-primary-500 focus:ring-primary-500" />
+            <input
+              type="checkbox"
+              defaultChecked
+              className="rounded border-border text-primary-500 focus:ring-primary-500"
+            />
             Remember for 30 days
           </label>
-          <a href="#" className="text-sm font-medium text-primary-600 hover:text-primary-700">Forgot password?</a>
+          <a href="#" className="text-sm font-medium text-primary-600 hover:text-primary-700">
+            Forgot password?
+          </a>
         </div>
 
-        <Button type="submit" variant="primary" className="w-full mt-4 py-6 text-base" disabled={isLoading}>
-          {isLoading ? "Signing In..." : "Sign In"}
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full mt-4 py-6 text-base"
+          disabled={isLoading}
+        >
+          {isLoading ? 'Signing In...' : 'Sign In'}
         </Button>
       </form>
 
@@ -95,13 +108,20 @@ function LoginForm() {
         </div>
       </div>
 
-      <Button variant="secondary" className="w-full relative py-6">
+      <Button
+        variant="secondary"
+        className="w-full relative py-6"
+        onClick={() => signIn('google', { callbackUrl })}
+      >
         <span className="absolute left-6">G</span>
         Sign in with Google
       </Button>
 
       <p className="text-center text-sm text-text-secondary mt-8">
-        Don&apos;t have an account? <a href="/register" className="font-semibold text-primary-600 hover:text-primary-700">Sign up here</a>
+        Don&apos;t have an account?{' '}
+        <a href="/register" className="font-semibold text-primary-600 hover:text-primary-700">
+          Sign up here
+        </a>
       </p>
     </div>
   );
@@ -109,11 +129,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center p-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

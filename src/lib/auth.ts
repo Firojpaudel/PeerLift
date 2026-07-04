@@ -1,7 +1,8 @@
 import { NextAuthOptions, DefaultSession } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import prisma from './prisma';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
+import GoogleProvider from 'next-auth/providers/google';
 
 declare module 'next-auth' {
   interface User {
@@ -34,12 +35,12 @@ export const authOptions: NextAuthOptions = {
         if (!credentials?.email || !credentials?.password) return null;
 
         // Admin bypass
-        if (credentials.email === "admin@peerlift.app" && credentials.password === "Admin123!") {
+        if (credentials.email === 'admin@peerlift.app' && credentials.password === 'Admin123!') {
           return {
-            id: "test-admin-id",
-            email: "admin@peerlift.app",
-            username: "adminuser",
-            name: "Admin User",
+            id: 'test-admin-id',
+            email: 'admin@peerlift.app',
+            username: 'adminuser',
+            name: 'Admin User',
             isAdmin: true,
           };
         }
@@ -50,10 +51,7 @@ export const authOptions: NextAuthOptions = {
 
         if (!user || user.isBanned) return null;
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.passwordHash || '',
-        );
+        const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash || '');
 
         if (!isPasswordValid) return null;
 
@@ -66,14 +64,54 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          prompt: 'consent',
+          access_type: 'offline',
+          response_type: 'code',
+          scope: 'openid email profile https://www.googleapis.com/auth/calendar',
+        },
+      },
+    }),
   ],
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
         token.username = user.username;
         token.isAdmin = user.isAdmin;
+      }
+      if (account && user && account.provider === 'google') {
+        try {
+          await prisma.account.upsert({
+            where: {
+              provider_providerAccountId: {
+                provider: 'google',
+                providerAccountId: account.providerAccountId,
+              },
+            },
+            update: {
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              expires_at: account.expires_at,
+            },
+            create: {
+              userId: user.id,
+              type: account.type || 'oauth',
+              provider: account.provider,
+              providerAccountId: account.providerAccountId,
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              expires_at: account.expires_at,
+            },
+          });
+        } catch (err) {
+          console.error('Failed to save Google account credentials:', err);
+        }
       }
       return token;
     },

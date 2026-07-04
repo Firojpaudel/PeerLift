@@ -4,11 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { createGoogleMeetLink } from '@/lib/google-meet';
 import prisma from '@/lib/prisma';
 import { pusherServer } from '@/lib/pusher';
-import { encryptMessage } from '@/lib/encryption';
+import { compressString } from '@/lib/compression';
 
 function getDMChannel(user1: string, user2: string) {
   const sorted = [user1, user2].sort();
-  return `private-dm-${sorted[0]}-${sorted[1]}`;
+  return `private-chat-${sorted[0]}-${sorted[1]}`;
 }
 
 export async function POST(req: Request) {
@@ -30,50 +30,62 @@ export async function POST(req: Request) {
     // Look up sender and receiver emails to invite them to the Google Calendar event
     const [sender, receiver] = await Promise.all([
       prisma.user.findUnique({ where: { id: session.user.id }, select: { email: true } }),
-      prisma.user.findUnique({ where: { id: receiverId }, select: { email: true } })
+      prisma.user.findUnique({ where: { id: receiverId }, select: { email: true } }),
     ]);
 
     const attendeeEmails: string[] = [];
     if (sender?.email) attendeeEmails.push(sender.email);
     if (receiver?.email) attendeeEmails.push(receiver.email);
 
-    const meetLink = await createGoogleMeetLink(meetSummary, start, 60, attendeeEmails);
+    const meetLink = await createGoogleMeetLink(
+      meetSummary,
+      start,
+      60,
+      attendeeEmails,
+      session.user.id
+    );
 
     if (!meetLink) {
       return NextResponse.json({ error: 'Failed to generate Google Meet link' }, { status: 500 });
     }
 
-    // Automatically send the meet link as an encrypted DM
+    // Automatically send the meet link as a compressed DM
     const systemMessage = `📅 **Meeting Scheduled!**\n\nI have generated a secure Google Meet link for our session:\n${meetLink}\n\n*Starts: ${start.toLocaleString()}*`;
-    const encryptedContent = encryptMessage(systemMessage);
+    const compressedContent = await compressString(systemMessage);
 
     const message = await prisma.message.create({
       data: {
         role: 'system',
-        content: encryptedContent,
+        content: compressedContent,
         userId: session.user.id,
         receiverId,
         status: 'SENT',
-        isCompressed: false,
+        isCompressed: true,
       },
     });
 
     const channelName = getDMChannel(session.user.id, receiverId);
     await pusherServer.trigger(channelName, 'new-message', {
       id: message.id,
-      content: systemMessage, // Send decrypted to pusher since it's private SSL channel
-      senderId: session.user.id,
+      content: systemMessage, // Send plain text to pusher for instant display
+      userId: session.user.id,
+      receiverId,
+      role: 'system',
       createdAt: message.createdAt,
       status: 'DELIVERED',
-      isSystem: true
+      isSystem: true,
     });
 
     await prisma.message.update({
       where: { id: message.id },
-      data: { status: 'DELIVERED' }
+      data: { status: 'DELIVERED' },
     });
 
-    return NextResponse.json({ success: true, meetLink, message: { ...message, content: systemMessage } });
+    return NextResponse.json({
+      success: true,
+      meetLink,
+      message: { ...message, content: systemMessage },
+    });
   } catch (error) {
     console.error('Meet API error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import prisma from './prisma';
 
 /**
  * Creates a Google Calendar event with a Google Meet link.
@@ -6,7 +7,8 @@ import { google } from 'googleapis';
  */
 function generateMockMeetLink(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz';
-  const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const rand = (len: number) =>
+    Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   return `https://meet.google.com/${rand(3)}-${rand(4)}-${rand(3)}`;
 }
 
@@ -14,12 +16,28 @@ export async function createGoogleMeetLink(
   summary: string,
   startTime: Date,
   durationMinutes: number = 60,
-  attendeeEmails: string[] = []
+  attendeeEmails: string[] = [],
+  userId?: string
 ): Promise<string | null> {
   try {
-    // Graceful fallback if Google credentials are not set in .env
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
-      console.warn('Google Calendar credentials not fully configured. Generating mock Google Meet link fallback.');
+    let refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+    // Check if the user has a personal Google account linked
+    if (userId) {
+      const googleAccount = await prisma.account.findFirst({
+        where: { userId, provider: 'google' },
+        select: { refresh_token: true },
+      });
+      if (googleAccount?.refresh_token) {
+        refreshToken = googleAccount.refresh_token;
+      }
+    }
+
+    // Graceful fallback if Google credentials are not set
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !refreshToken) {
+      console.warn(
+        'Google Calendar credentials not fully configured. Generating mock Google Meet link fallback.'
+      );
       return generateMockMeetLink();
     }
 
@@ -31,7 +49,7 @@ export async function createGoogleMeetLink(
 
     // Assuming we have a stored refresh token for the user/system account
     oauth2Client.setCredentials({
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+      refresh_token: refreshToken,
     });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -55,7 +73,7 @@ export async function createGoogleMeetLink(
           conferenceSolutionKey: { type: 'hangoutsMeet' },
         },
       },
-      attendees: attendeeEmails.length > 0 ? attendeeEmails.map(email => ({ email })) : undefined
+      attendees: attendeeEmails.length > 0 ? attendeeEmails.map((email) => ({ email })) : undefined,
     };
 
     const response = await calendar.events.insert({
