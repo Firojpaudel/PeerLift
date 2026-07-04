@@ -319,37 +319,43 @@ const markdownComponents = {
   }
 };
 function splitTextIntoSpeechChunks(text: string): string[] {
-  // 1. Remove deepseek thinking blocks
+  // 1. Remove raw <think> reasoning blocks (from raw reasoning_format)
   let cleanText = text.replace(/<think>[\s\S]*?<\/think>/g, '');
 
-  // 2. Remove code blocks entirely (they are not meant to be read aloud)
+  // 2. Remove styled reasoning blocks (from getMessageText's <details> conversion)
+  cleanText = cleanText.replace(/<details[^>]*>[\s\S]*?<\/details>/g, '');
+
+  // 3. Remove code blocks entirely (they are not meant to be read aloud)
   cleanText = cleanText.replace(/```[\s\S]*?```/g, '');
 
-  // 3. Remove inline code backticks but keep the code content
+  // 4. Remove inline code backticks but keep the code content
   cleanText = cleanText.replace(/`([^`]+)`/g, '$1');
 
-  // 4. Strip markdown image tags
+  // 5. Strip markdown image tags
   cleanText = cleanText.replace(/!\[([^\]]*)\]\([^)]+\)/g, '');
 
-  // 5. Convert markdown links e.g. [Next.js](https://nextjs.org) to just the text "Next.js"
+  // 6. Convert markdown links e.g. [Next.js](https://nextjs.org) to just the text "Next.js"
   cleanText = cleanText.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 
-  // 6. Clean up headers (e.g. ### Header -> Header)
+  // 7. Clean up headers (e.g. ### Header -> Header)
   cleanText = cleanText.replace(/^\s*#{1,6}\s+/gm, '');
 
-  // 7. Remove list bullets (e.g. * Item or - Item -> Item)
+  // 8. Remove list bullets (e.g. * Item or - Item -> Item)
   cleanText = cleanText.replace(/^\s*[-*+]\s+/gm, '');
 
-  // 8. Remove list numbers (e.g. 1. Item -> Item)
+  // 9. Remove list numbers (e.g. 1. Item -> Item)
   cleanText = cleanText.replace(/^\s*\d+\.\s+/gm, '');
 
-  // 9. Remove any remaining HTML tags (like <br />)
+  // 10. Remove any remaining HTML tags (like <br />)
   cleanText = cleanText.replace(/<[^>]*>/g, '');
 
-  // 10. Clean up any remaining markdown formatting symbols
+  // 11. Clean up any remaining markdown formatting symbols
   cleanText = cleanText.replace(/[*_~|]/g, '');
 
-  // 11. Normalize spaces and lines
+  // 12. Remove emoji characters that TTS can't pronounce well
+  cleanText = cleanText.replace(/🧠|✅|🌐|⚡|💡|🔍|📌|📝|✨|🎯|🚀|📊/g, '');
+
+  // 13. Normalize spaces and lines
   cleanText = cleanText
     .replace(/\s+/g, ' ')
     .replace(/={2,}/g, '')
@@ -367,12 +373,12 @@ function splitTextIntoSpeechChunks(text: string): string[] {
     chunk = chunk.trim();
     if (!chunk) continue;
 
-    // If a sentence is longer than 180 chars, chunk it by commas or spaces
-    if (chunk.length > 180) {
-      const parts = chunk.split(/([,;:\-\n]|\s{2,})/);
+    // If a sentence is longer than 200 chars, chunk it by natural break points
+    if (chunk.length > 200) {
+      const parts = chunk.split(/([,;:]|\s{2,})/);
       let currentPart = "";
       for (const p of parts) {
-        if ((currentPart + p).length > 180) {
+        if ((currentPart + p).length > 200) {
           if (currentPart.trim()) {
             chunks.push(currentPart.trim());
           }
@@ -389,7 +395,19 @@ function splitTextIntoSpeechChunks(text: string): string[] {
     }
   }
 
-  return chunks.filter(c => c.trim().length > 1);
+  // Merge tiny chunks into the previous one to reduce pauses between TTS calls
+  const merged: string[] = [];
+  for (const c of chunks) {
+    const trimmed = c.trim();
+    if (!trimmed || trimmed.length < 3) continue;
+    if (merged.length > 0 && trimmed.length < 30 && (merged[merged.length - 1].length + trimmed.length) < 200) {
+      merged[merged.length - 1] += ' ' + trimmed;
+    } else {
+      merged.push(trimmed);
+    }
+  }
+
+  return merged.filter(c => c.trim().length > 2);
 }
 
 
@@ -1141,9 +1159,11 @@ function ChatSessionInner() {
 
     const spokenText = (text || '')
       .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/<details[^>]*>[\s\S]*?<\/details>/g, '')
       .replace(/```[\s\S]*?```/g, '')
       .replace(/\[\d+\]/g, '')
       .replace(/[#*`_\[\]()~|>]/g, '')
+      .replace(/🧠|✅|🌐|⚡|💡|🔍|📌|📝|✨|🎯|🚀|📊/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
