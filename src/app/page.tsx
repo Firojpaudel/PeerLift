@@ -141,30 +141,95 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Footer to satisfy Google Verification Requirements */}
-      <footer className="w-full bg-bg-primary py-12 border-t border-border mt-auto">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex flex-col md:flex-row items-center justify-between gap-6 text-sm text-text-secondary">
-          <div className="flex flex-col items-center md:items-start gap-2">
-            <span className="font-display font-extrabold text-lg text-primary-600">PeerLift</span>
-            <p className="text-center md:text-left max-w-md text-text-muted text-xs leading-relaxed">
-              PeerLift is a peer-to-peer learning platform that eliminates financial barriers by
-              letting users trade skills. Our Google integration is used solely to schedule study
-              sessions on users&apos; Google Calendars and generate secure Google Meet video links.
-            </p>
+      {/* Premium Footer for Landing Page */}
+      <footer className="w-full bg-bg-primary border-t border-border mt-auto py-16 relative z-20">
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-10 pb-12 border-b border-border">
+            {/* Branding Column */}
+            <div className="md:col-span-6 flex flex-col items-start gap-4">
+              <div className="flex items-center gap-2 font-display font-extrabold text-xl text-primary-600">
+                <img
+                  src="/icon-light.png"
+                  alt="PeerLift Logo"
+                  className="w-6 h-6 rounded-md block dark:hidden object-contain"
+                />
+                <img
+                  src="/icon-dark.png"
+                  alt="PeerLift Logo"
+                  className="w-6 h-6 rounded-md hidden dark:block object-contain"
+                />
+                <span>PeerLift</span>
+              </div>
+              <p className="text-sm text-text-secondary leading-relaxed max-w-md">
+                PeerLift is a collaborative peer-to-peer skill exchange platform designed to
+                eliminate financial barriers to education. Learn what you want and teach what you
+                know at zero cost.
+              </p>
+              <div className="bg-bg-secondary border border-border p-4 rounded-xl text-xs text-text-muted max-w-md leading-relaxed mt-2">
+                <strong>Google OAuth Transparency Notice:</strong> PeerLift requests access to
+                Google Calendar solely to coordinate session scheduling and automatically generate
+                secure Google Meet links. We never store or modify unrelated calendar events.
+              </div>
+            </div>
+
+            {/* Links Column 1: Navigation */}
+            <div className="md:col-span-3 flex flex-col gap-3">
+              <h4 className="text-xs font-bold text-text-primary uppercase tracking-widest">
+                Platform
+              </h4>
+              <ul className="space-y-2 text-sm text-text-secondary">
+                <li>
+                  <a href="#how-it-works" className="hover:text-primary-500 transition-colors">
+                    How it works
+                  </a>
+                </li>
+                <li>
+                  <a href="/login" className="hover:text-primary-500 transition-colors">
+                    Sign In
+                  </a>
+                </li>
+                <li>
+                  <a href="/register" className="hover:text-primary-500 transition-colors">
+                    Create Account
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            {/* Links Column 2: Legal & Support */}
+            <div className="md:col-span-3 flex flex-col gap-3">
+              <h4 className="text-xs font-bold text-text-primary uppercase tracking-widest">
+                Legal & Help
+              </h4>
+              <ul className="space-y-2 text-sm text-text-secondary">
+                <li>
+                  <a
+                    href="/privacy"
+                    className="hover:text-primary-500 transition-colors font-medium"
+                  >
+                    Privacy Policy
+                  </a>
+                </li>
+                <li>
+                  <a href="/terms" className="hover:text-primary-500 transition-colors font-medium">
+                    Terms of Service
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="mailto:firojpaudel@gmail.com"
+                    className="hover:text-primary-500 transition-colors"
+                  >
+                    Support & Contact
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <a href="/privacy" className="hover:text-primary-600 transition-colors">
-              Privacy Policy
-            </a>
-            <a href="/terms" className="hover:text-primary-600 transition-colors">
-              Terms of Service
-            </a>
-            <a
-              href="mailto:firojpaudel@gmail.com"
-              className="hover:text-primary-600 transition-colors"
-            >
-              Contact Support
-            </a>
+
+          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-text-muted">
+            <span>&copy; {new Date().getFullYear()} PeerLift. All rights reserved.</span>
+            <span>Made for learners everywhere.</span>
           </div>
         </div>
       </footer>
