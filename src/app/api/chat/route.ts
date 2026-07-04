@@ -117,18 +117,20 @@ ${contextData?.learningGoal ? `\nUser's Learning Goal/Topic: ${contextData.learn
 ${contextData?.documentText ? `\n\n--- UPLOADED CONTEXT DOCUMENT ---\n${contextData.documentText}\n---------------------------------` : ""}`;
 
     const tModel = isReasoning
-      ? groq("deepseek-r1-distill-qwen-32b")
+      ? groq("qwen/qwen3-32b")
       : groq("llama-3.3-70b-versatile");
 
     const result = await streamText({
       model: tModel,
       messages: modelMessages,
       system: systemPrompt,
-      providerOptions: {
-        groq: {
-          reasoningFormat: "parsed",
+      ...(isReasoning && {
+        providerOptions: {
+          groq: {
+            reasoningFormat: "parsed",
+          },
         },
-      },
+      }),
       tools: {
         searchWeb: tool({
           description: "Search the web for real-time information, late-breaking news, or specific documentation outside your training data.",
