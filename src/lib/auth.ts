@@ -79,6 +79,39 @@ export const authOptions: NextAuthOptions = {
   ],
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === 'google') {
+        const email = user.email;
+        if (!email) return false;
+
+        let dbUser = await prisma.user.findUnique({
+          where: { email },
+        });
+
+        if (!dbUser) {
+          const baseUsername = email
+            .split('@')[0]
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .toLowerCase();
+          const uniqueUsername = `${baseUsername}_${Math.floor(Math.random() * 1000)}`;
+
+          dbUser = await prisma.user.create({
+            data: {
+              email,
+              name: user.name || 'User',
+              username: uniqueUsername,
+              avatarUrl: user.image,
+              credits: 50,
+            },
+          });
+        }
+
+        user.id = dbUser.id;
+        user.username = dbUser.username;
+        user.isAdmin = dbUser.isAdmin;
+      }
+      return true;
+    },
     async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
