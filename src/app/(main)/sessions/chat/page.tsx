@@ -568,6 +568,8 @@ function ChatSessionInner() {
 
       if (currentItem.audioUrl) {
         const audio = new Audio(currentItem.audioUrl);
+        audio.defaultPlaybackRate = 1.25;
+        audio.playbackRate = 1.25;
         currentAudioRef.current = audio;
         
         audio.onended = () => {
